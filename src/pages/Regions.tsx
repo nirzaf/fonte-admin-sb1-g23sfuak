@@ -19,11 +19,13 @@ import {
   Switch,
   FormControlLabel,
   CircularProgress,
+  Autocomplete,
+  Chip,
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon } from '@mui/icons-material';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-toastify';
-import type { Region } from '../lib/supabase';
+import type { Region, Category, RegionCategoryMapping } from '../lib/supabase';
 import React from 'react';
 
 const defaultRegion: Partial<Region> = {
@@ -51,6 +53,8 @@ const defaultRegion: Partial<Region> = {
 
 export default function Regions() {
   const [regions, setRegions] = useState<Region[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<Category[]>([]);
   const [open, setOpen] = useState(false);
   const [editingRegion, setEditingRegion] = useState<Region | null>(null);
   const [formData, setFormData] = useState<Partial<Region>>(defaultRegion);
@@ -58,6 +62,7 @@ export default function Regions() {
 
   useEffect(() => {
     fetchRegions();
+    fetchCategories();
   }, []);
 
   const fetchRegions = async () => {
@@ -113,13 +118,50 @@ export default function Regions() {
     }
   };
 
-  const handleOpen = (region?: Region) => {
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('order_index');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      toast.error('Failed to fetch categories');
+    }
+  };
+
+  const fetchRegionCategories = async (regionId: number) => {
+    try {
+      const { data, error } = await supabase
+        .from('region_category_mapping')
+        .select('*, categories(*)')
+        .eq('region_id', regionId);
+
+      if (error) throw error;
+      
+      const regionCategories = data
+        .map(mapping => mapping.categories)
+        .filter(category => category !== null);
+      
+      setSelectedCategories(regionCategories);
+    } catch (error) {
+      console.error('Error fetching region categories:', error);
+      toast.error('Failed to fetch region categories');
+    }
+  };
+
+  const handleOpen = async (region?: Region) => {
     if (region) {
       setEditingRegion(region);
       setFormData(region);
+      await fetchRegionCategories(region.id);
     } else {
       setEditingRegion(null);
       setFormData(defaultRegion);
+      setSelectedCategories([]);
     }
     setOpen(true);
   };
@@ -128,6 +170,7 @@ export default function Regions() {
     setOpen(false);
     setEditingRegion(null);
     setFormData(defaultRegion);
+    setSelectedCategories([]);
   };
 
   const handleChange = (field: keyof Region) => (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,19 +198,57 @@ export default function Regions() {
       if (editingRegion) {
         // Remove name, code, and locale from the update
         const { name, code, locale, ...updatableFields } = formData;
-        const { error } = await supabase
+        const { error: updateError } = await supabase
           .from('regions')
           .update(updatableFields)
           .eq('id', editingRegion.id);
 
-        if (error) throw error;
+        if (updateError) throw updateError;
+
+        // Update category mappings
+        const { error: deleteMappingsError } = await supabase
+          .from('region_category_mapping')
+          .delete()
+          .eq('region_id', editingRegion.id);
+
+        if (deleteMappingsError) throw deleteMappingsError;
+
+        if (selectedCategories.length > 0) {
+          const mappings = selectedCategories.map(category => ({
+            region_id: editingRegion.id,
+            category_id: category.id
+          }));
+
+          const { error: insertMappingsError } = await supabase
+            .from('region_category_mapping')
+            .insert(mappings);
+
+          if (insertMappingsError) throw insertMappingsError;
+        }
+
         toast.success('Region updated successfully');
       } else {
-        const { error } = await supabase
+        const { data: newRegion, error: insertError } = await supabase
           .from('regions')
-          .insert([formData]);
+          .insert([formData])
+          .select()
+          .single();
 
-        if (error) throw error;
+        if (insertError) throw insertError;
+
+        if (selectedCategories.length > 0 && newRegion) {
+          const mappings = selectedCategories.map(category => ({
+            region_id: newRegion.id,
+            category_id: category.id
+          }));
+
+          const { error: mappingError } = await supabase
+            .from('region_category_mapping')
+            .insert(mappings);
+
+          if (mappingError) throw mappingError;
+        }
+
         toast.success('Region created successfully');
       }
 
@@ -418,6 +499,30 @@ export default function Regions() {
                 fullWidth
                 value={formData.image_url_4}
                 onChange={handleChange('image_url_4')}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Autocomplete
+                multiple
+                options={categories}
+                value={selectedCategories}
+                onChange={(_, newValue) => setSelectedCategories(newValue)}
+                getOptionLabel={(option) => option.name}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Categories"
+                    placeholder="Select categories"
+                  />
+                )}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => (
+                    <Chip
+                      label={option.name}
+                      {...getTagProps({ index })}
+                    />
+                  ))
+                }
               />
             </Grid>
           </Grid>

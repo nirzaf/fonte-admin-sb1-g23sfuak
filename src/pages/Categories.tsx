@@ -9,6 +9,14 @@ import {
   TextField,
   IconButton,
   Typography,
+  TableContainer,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Paper,
+  Chip,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
@@ -16,15 +24,17 @@ import { supabase } from '../lib/supabase';
 import { uploadImage } from '../lib/cloudinary';
 import { toast } from 'react-toastify';
 import slugify from 'slugify';
+import React from 'react';
 
 interface Category {
   id: string;
   name: string;
   slug: string;
-  description: string;
-  image_url: string;
-  icon_url: string;
-  order_position: number;
+  description?: string;
+  image_url?: string;
+  order_index: number;
+  icon_url?: string;
+  regions?: { id: number; name: string }[];
 }
 
 interface CategoryFormData {
@@ -47,17 +57,37 @@ export default function Categories() {
   });
 
   const fetchCategories = async () => {
-    const { data, error } = await supabase
-      .from('categories')
-      .select('*')
-      .order('order_position');
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select(`
+          *,
+          region_category_mapping (
+            regions (
+              id,
+              name
+            )
+          )
+        `)
+        .order('order_index');
 
-    if (error) {
-      toast.error('Error fetching categories');
-      return;
+      if (error) {
+        toast.error('Error fetching categories');
+        return;
+      }
+
+      // Transform the data to include regions
+      const categoriesWithRegions = data.map(category => ({
+        ...category,
+        regions: category.region_category_mapping
+          ?.map(mapping => mapping.regions)
+          .filter(region => region !== null)
+      }));
+
+      setCategories(categoriesWithRegions);
+    } catch (error) {
+      console.error('Error:', error);
     }
-
-    setCategories(data);
   };
 
   useEffect(() => {
@@ -69,8 +99,8 @@ export default function Categories() {
       setEditingId(category.id);
       setFormData({
         name: category.name,
-        description: category.description,
-        order_position: category.order_position,
+        description: category.description || '',
+        order_position: category.order_index,
       });
     } else {
       setEditingId(null);
@@ -165,7 +195,24 @@ export default function Categories() {
   const columns: GridColDef[] = [
     { field: 'name', headerName: 'Name', flex: 1 },
     { field: 'description', headerName: 'Description', flex: 2 },
-    { field: 'order_position', headerName: 'Order', width: 100 },
+    { field: 'order_index', headerName: 'Order', width: 100 },
+    {
+      field: 'regions',
+      headerName: 'Regions',
+      width: 200,
+      renderCell: (params) => (
+        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+          {params.value.map(region => (
+            <Chip
+              key={region.id}
+              label={region.name}
+              size="small"
+              variant="outlined"
+            />
+          ))}
+        </Box>
+      ),
+    },
     {
       field: 'actions',
       headerName: 'Actions',
@@ -196,17 +243,52 @@ export default function Categories() {
         </Button>
       </Box>
 
-      <DataGrid
-        rows={categories}
-        columns={columns}
-        initialState={{
-          pagination: {
-            paginationModel: { page: 0, pageSize: 10 },
-          },
-        }}
-        pageSizeOptions={[10, 20, 50]}
-        autoHeight
-      />
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Name</TableCell>
+              <TableCell>Description</TableCell>
+              <TableCell>Order</TableCell>
+              <TableCell>Regions</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {categories.map((category) => (
+              <TableRow key={category.id}>
+                <TableCell>{category.name}</TableCell>
+                <TableCell>{category.description || '-'}</TableCell>
+                <TableCell>{category.order_index}</TableCell>
+                <TableCell>
+                  {category.regions && category.regions.length > 0 ? (
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                      {category.regions.map(region => (
+                        <Chip
+                          key={region.id}
+                          label={region.name}
+                          size="small"
+                          variant="outlined"
+                        />
+                      ))}
+                    </Box>
+                  ) : (
+                    '-'
+                  )}
+                </TableCell>
+                <TableCell>
+                  <IconButton onClick={() => handleOpen(category)}>
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton onClick={() => handleDelete(category.id)}>
+                    <DeleteIcon />
+                  </IconButton>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
         <DialogTitle>
