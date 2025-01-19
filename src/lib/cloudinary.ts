@@ -1,4 +1,4 @@
-import { Cloudinary } from 'cloudinary-core';
+import { Cloudinary } from '@cloudinary/url-gen';
 
 const cloudinaryConfig = {
   cloud_name: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME,
@@ -6,7 +6,11 @@ const cloudinaryConfig = {
   api_secret: import.meta.env.VITE_CLOUDINARY_API_SECRET,
 };
 
-export const cloudinary = new Cloudinary({ cloud_name: cloudinaryConfig.cloud_name });
+export const cloudinary = new Cloudinary({
+  cloud: {
+    cloudName: cloudinaryConfig.cloud_name
+  }
+});
 
 export const uploadImage = async (file: File) => {
   // Compress image before upload
