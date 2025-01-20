@@ -47,7 +47,7 @@ export default function Dashboard() {
 
       // Get subcategories count
       const { count: subcategoriesCount } = await supabase
-        .from('subcategories')
+        .from('sub_categories')
         .select('*', { count: 'exact' });
 
       // Get regions count
@@ -59,7 +59,7 @@ export default function Dashboard() {
       const { data: productsByCategory, error: categoryError } = await supabase
         .from('products')
         .select(`
-          subcategory:subcategories (
+          subcategory:sub_categories (
             category:categories (
               id,
               name

@@ -23,6 +23,7 @@ import {
   Tabs,
   TextField,
   Typography,
+  Tooltip
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Image as ImageIcon } from '@mui/icons-material';
 import { supabase } from '../lib/supabase';
@@ -55,6 +56,22 @@ interface RegionProductMapping {
   region: Region;
 }
 
+interface ProductColor {
+  id: number;
+  product_id: number;
+  name: string;
+  color_code: string;
+  image_url: string;
+  is_default: boolean;
+}
+
+interface ProductCareInstruction {
+  id: number;
+  product_id: number;
+  instruction: string;
+  icon: string;
+}
+
 interface Product {
   id: number;
   name: string;
@@ -73,6 +90,8 @@ interface Product {
   end_use?: string;
   image_url?: string;
   region_product_mapping?: RegionProductMapping[];
+  product_colors?: ProductColor[];
+  product_care_instructions?: ProductCareInstruction[];
 }
 
 interface ProductFormData {
@@ -92,6 +111,14 @@ interface ProductFormData {
   image_url: string;
   region_ids: number[];
   image?: File;
+  colors: {
+    color_name: string;
+    color_code: string;
+    image_url: string;
+    is_default: boolean;
+    image?: File;
+  }[];
+  care_instructions: string[];
 }
 
 export default function Products() {
@@ -128,6 +155,8 @@ export default function Products() {
     end_use: '',
     image_url: '',
     region_ids: [],
+    colors: [],
+    care_instructions: [],
   });
 
   const columns: GridColDef[] = [
@@ -153,6 +182,80 @@ export default function Products() {
           {params.row.region_product_mapping?.map((rpm: RegionProductMapping) => (
             <Chip key={rpm.region.id} label={rpm.region.name} size="small" />
           )) || 'N/A'}
+        </Box>
+      ),
+    },
+    {
+      field: 'colors',
+      headerName: 'Colors',
+      flex: 1,
+      renderCell: (params) => (
+        <Box display="flex" gap={0.5} alignItems="center">
+          {params.row.product_colors?.map((color: ProductColor) => (
+            <Tooltip
+              key={color.id}
+              title={
+                <Box>
+                  <Typography variant="caption" display="block">{color.name}</Typography>
+                  {color.is_default && (
+                    <Typography variant="caption" display="block" color="primary">Default Color</Typography>
+                  )}
+                </Box>
+              }
+            >
+              <Box sx={{ position: 'relative' }}>
+                {color.image_url ? (
+                  <Card sx={{ width: 30, height: 30 }}>
+                    <CardMedia
+                      component="img"
+                      height="30"
+                      image={color.image_url}
+                      alt={color.name}
+                    />
+                  </Card>
+                ) : (
+                  <Box
+                    sx={{
+                      width: 30,
+                      height: 30,
+                      bgcolor: color.color_code,
+                      border: '1px solid #ccc',
+                      borderRadius: '4px'
+                    }}
+                  />
+                )}
+                {color.is_default && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -4,
+                      width: 8,
+                      height: 8,
+                      bgcolor: 'primary.main',
+                      borderRadius: '50%'
+                    }}
+                  />
+                )}
+              </Box>
+            </Tooltip>
+          )) || 'N/A'}
+        </Box>
+      ),
+    },
+    {
+      field: 'care_instructions',
+      headerName: 'Care Instructions',
+      flex: 1,
+      renderCell: (params) => (
+        <Box display="flex" gap={0.5}>
+          {params.row.product_care_instructions?.length > 0 ? (
+            <Tooltip title={params.row.product_care_instructions.map((ci: ProductCareInstruction) => ci.instruction).join('\n')}>
+              <Chip label={`${params.row.product_care_instructions.length} instructions`} size="small" />
+            </Tooltip>
+          ) : (
+            'N/A'
+          )}
         </Box>
       ),
     },
@@ -259,6 +362,18 @@ export default function Products() {
             id,
             name
           )
+        ),
+        product_colors (
+          id,
+          name,
+          color_code,
+          image_url,
+          is_default
+        ),
+        product_care_instructions (
+          id,
+          instruction,
+          icon
         )
       `)
       .order('name');
@@ -351,6 +466,13 @@ export default function Products() {
         end_use: product.end_use || '',
         image_url: product.image_url || '',
         region_ids: product.region_product_mapping?.map(rpm => rpm.region.id) || [],
+        colors: product.product_colors?.map(pc => ({
+          color_name: pc.name,
+          color_code: pc.color_code,
+          image_url: pc.image_url || '',
+          is_default: pc.is_default || false
+        })) || [],
+        care_instructions: product.product_care_instructions?.map(ci => ci.instruction) || [],
       });
     } else {
       setEditingId(null);
@@ -372,6 +494,8 @@ export default function Products() {
         end_use: '',
         image_url: '',
         region_ids: [],
+        colors: [],
+        care_instructions: [],
       });
     }
     setOpen(true);
@@ -446,6 +570,55 @@ export default function Products() {
           const { error } = await supabase
             .from('region_product_mappings')
             .insert(mappings);
+
+          if (error) throw error;
+        }
+      }
+
+      // Handle colors
+      if (productId) {
+        // Delete existing colors
+        await supabase
+          .from('product_colors')
+          .delete()
+          .eq('product_id', productId);
+
+        // Insert new colors
+        if (formData.colors.length > 0) {
+          const colors = formData.colors.map(color => ({
+            product_id: productId,
+            color_name: color.color_name,
+            color_code: color.color_code,
+            image_url: color.image_url,
+            is_default: color.is_default,
+          }));
+
+          const { error } = await supabase
+            .from('product_colors')
+            .insert(colors);
+
+          if (error) throw error;
+        }
+      }
+
+      // Handle care instructions
+      if (productId) {
+        // Delete existing care instructions
+        await supabase
+          .from('product_care_instructions')
+          .delete()
+          .eq('product_id', productId);
+
+        // Insert new care instructions
+        if (formData.care_instructions.length > 0) {
+          const careInstructions = formData.care_instructions.map(instruction => ({
+            product_id: productId,
+            instruction,
+          }));
+
+          const { error } = await supabase
+            .from('product_care_instructions')
+            .insert(careInstructions);
 
           if (error) throw error;
         }
@@ -529,11 +702,9 @@ export default function Products() {
       />
 
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {editingId ? 'Edit Product' : 'Add New Product'}
-        </DialogTitle>
+        <DialogTitle>{editingId ? 'Edit Product' : 'Add Product'}</DialogTitle>
         <DialogContent>
-          <Grid container spacing={3} sx={{ mt: 1 }}>
+          <Grid container spacing={2}>
             <Grid item xs={12}>
               <TextField
                 label="Name"
@@ -699,6 +870,187 @@ export default function Products() {
                 }
                 label="Active"
               />
+            </Grid>
+
+            {/* Colors Section */}
+            <Grid item xs={12}>
+              <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>Colors</Typography>
+              {formData.colors.map((color, index) => (
+                <Box key={index} sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <TextField
+                    label="Color Name"
+                    value={color.color_name}
+                    onChange={(e) => {
+                      const newColors = [...formData.colors];
+                      newColors[index].color_name = e.target.value;
+                      setFormData({ ...formData, colors: newColors });
+                    }}
+                    size="small"
+                  />
+                  <TextField
+                    label="Color Code"
+                    value={color.color_code}
+                    onChange={(e) => {
+                      const newColors = [...formData.colors];
+                      newColors[index].color_code = e.target.value;
+                      setFormData({ ...formData, colors: newColors });
+                    }}
+                    size="small"
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <Box
+                            sx={{
+                              width: 20,
+                              height: 20,
+                              bgcolor: color.color_code,
+                              border: '1px solid #ccc',
+                              borderRadius: '4px'
+                            }}
+                          />
+                        </InputAdornment>
+                      )
+                    }}
+                  />
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <TextField
+                      label="Color Image URL"
+                      value={color.image_url}
+                      onChange={(e) => {
+                        const newColors = [...formData.colors];
+                        newColors[index].image_url = e.target.value;
+                        setFormData({ ...formData, colors: newColors });
+                      }}
+                      size="small"
+                    />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <input
+                        accept="image/*"
+                        type="file"
+                        id={`color-image-${index}`}
+                        style={{ display: 'none' }}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const newColors = [...formData.colors];
+                            newColors[index].image = file;
+                            
+                            try {
+                              const uploadedUrl = await uploadImage(file);
+                              if (uploadedUrl) {
+                                newColors[index].image_url = uploadedUrl;
+                              }
+                            } catch (error) {
+                              console.error('Error uploading image:', error);
+                              toast.error('Error uploading image');
+                            }
+                            
+                            setFormData({ ...formData, colors: newColors });
+                          }
+                        }}
+                      />
+                      <label htmlFor={`color-image-${index}`}>
+                        <Button
+                          component="span"
+                          size="small"
+                          startIcon={<ImageIcon />}
+                        >
+                          Upload Image
+                        </Button>
+                      </label>
+                    </Box>
+                  </Box>
+                  {color.image_url && (
+                    <Card sx={{ width: 60, height: 60 }}>
+                      <CardMedia
+                        component="img"
+                        height="60"
+                        image={color.image_url}
+                        alt={color.color_name}
+                      />
+                    </Card>
+                  )}
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={color.is_default}
+                        onChange={(e) => {
+                          const newColors = [...formData.colors];
+                          // Unset other default colors if this one is being set as default
+                          if (e.target.checked) {
+                            newColors.forEach(c => c.is_default = false);
+                          }
+                          newColors[index].is_default = e.target.checked;
+                          setFormData({ ...formData, colors: newColors });
+                        }}
+                      />
+                    }
+                    label="Default"
+                  />
+                  <IconButton
+                    onClick={() => {
+                      const newColors = formData.colors.filter((_, i) => i !== index);
+                      setFormData({ ...formData, colors: newColors });
+                    }}
+                    size="small"
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </Box>
+              ))}
+              <Button
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setFormData({
+                    ...formData,
+                    colors: [...formData.colors, { color_name: '', color_code: '', image_url: '', is_default: false }]
+                  });
+                }}
+                size="small"
+              >
+                Add Color
+              </Button>
+            </Grid>
+
+            {/* Care Instructions Section */}
+            <Grid item xs={12}>
+              <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>Care Instructions</Typography>
+              {formData.care_instructions.map((instruction, index) => (
+                <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                  <TextField
+                    fullWidth
+                    label="Instruction"
+                    value={instruction}
+                    onChange={(e) => {
+                      const newInstructions = [...formData.care_instructions];
+                      newInstructions[index] = e.target.value;
+                      setFormData({ ...formData, care_instructions: newInstructions });
+                    }}
+                    size="small"
+                  />
+                  <IconButton
+                    onClick={() => {
+                      const newInstructions = formData.care_instructions.filter((_, i) => i !== index);
+                      setFormData({ ...formData, care_instructions: newInstructions });
+                    }}
+                    size="small"
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </Box>
+              ))}
+              <Button
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setFormData({
+                    ...formData,
+                    care_instructions: [...formData.care_instructions, '']
+                  });
+                }}
+                size="small"
+              >
+                Add Care Instruction
+              </Button>
             </Grid>
           </Grid>
         </DialogContent>
