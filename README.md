@@ -21,16 +21,15 @@ Designing a user interface (UI) for an admin operation for your website requires
 ---
 
 #### **2. Manage Regions**
-- **Purpose**: Allow admins to view, add, edit, or delete regions.
+- **Purpose**: Allow admins to view, add, edit.
 - **Components**:
   - Table listing all regions with columns:
     - Region ID
     - Region Name
-    - Actions (Edit, Delete)
-  - "Add New Region" button at the top.
-  - Modal for adding/editing regions:
-    - Input fields:
-      - Region Name
+    - Code
+    - Locale
+    - Actions (Edit, Delete)   - ID , Name , code , locale must not be editable. remaining fields can be editable.
+  - Modal for editing regions:
     - Save/Cancel buttons.
 
 ---
@@ -41,7 +40,7 @@ Designing a user interface (UI) for an admin operation for your website requires
   - Table listing all categories with columns:
     - Category ID
     - Category Name
-    - Associated Regions (display as tags or a dropdown)
+    - Associated Regions (display as tags)
     - Actions (Edit, Delete)
   - "Add New Category" button at the top.
   - Modal for adding/editing categories:
@@ -93,28 +92,7 @@ Designing a user interface (UI) for an admin operation for your website requires
 
 ---
 
-#### **6. Product Variants Management**
-- **Purpose**: Allow admins to manage variants for each product.
-- **Components**:
-  - Integrated into the "Manage Products" modal (as repeatable fields).
-  - Alternatively, a separate section for managing variants:
-    - Table listing variants for a selected product with columns:
-      - Variant ID
-      - Variant Name
-      - SKU
-      - Price
-      - Actions (Edit, Delete)
-    - "Add New Variant" button.
-    - Modal for adding/editing variants:
-      - Input fields:
-        - Variant Name
-        - SKU
-        - Price
-      - Save/Cancel buttons.
-
----
-
-#### **7. Filters and Search**
+#### **6. Filters and Search**
 - **Purpose**: Allow admins to quickly find products, categories, or subcategories.
 - **Components**:
   - Search bar (global search across products, categories, and subcategories).
@@ -125,19 +103,13 @@ Designing a user interface (UI) for an admin operation for your website requires
 
 ---
 
-#### **8. Bulk Actions**
-- **Purpose**: Allow admins to perform actions on multiple items at once.
-- **Components**:
-  - Checkboxes next to each item in tables.
-  - Bulk action dropdown with options:
-    - Delete
-    - Assign to Region
-    - Assign to Category/Subcategory
+### **7. Medica Library
+- Impelemnet
 
 ---
 
-#### **9. Responsive Design**
-- Ensure the UI is mobile-friendly and works seamlessly across devices.
+#### **8. Responsive Design**
+- Ensure the UI is mobile-friendly and works seamlessly across devices.  Shows progress loaders with some delay to indicate the progress when fetching the data or submitting tha data to server in the UI.
 
 ---
 
@@ -158,4 +130,4 @@ Designing a user interface (UI) for an admin operation for your website requires
 
 ---
 
-This design ensures that the admin panel is user-friendly, scalable, and efficient for managing the complex relationships between products, categories, subcategories, and regions. Let me know if you need further details or mockups!
+This design ensures that the admin panel is user-friendly, scalable, and efficient for managing the complex relationships between products, categories, subcategories, and regions.
