@@ -17,9 +17,17 @@ import {
   TableBody,
   Paper,
   Chip,
+  Grid,
+  CircularProgress,
+  Autocomplete,
+  Tab,
+  Tabs,
+  Card,
+  CardMedia,
+  CardActionArea,
+  InputAdornment,
 } from '@mui/material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Image as ImageIcon } from '@mui/icons-material';
 import { supabase } from '../lib/supabase';
 import { uploadImage } from '../lib/cloudinary';
 import { toast } from 'react-toastify';
@@ -43,18 +51,51 @@ interface CategoryFormData {
   order_position: number;
   image?: File;
   icon?: File;
+  image_url?: string;
+  icon_url?: string;
+  selectedRegions: { id: number; name: string }[];
+}
+
+interface Region {
+  id: number;
+  name: string;
+  code: string;
 }
 
 export default function Categories() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [regions, setRegions] = useState<Region[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [imageTab, setImageTab] = useState(0);
+  const [iconTab, setIconTab] = useState(0);
   const [formData, setFormData] = useState<CategoryFormData>({
     name: '',
     description: '',
     order_position: 0,
+    selectedRegions: [],
   });
+
+  useEffect(() => {
+    fetchCategories();
+    fetchRegions();
+  }, []);
+
+  const fetchRegions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('regions')
+        .select('id, name, code')
+        .order('name');
+
+      if (error) throw error;
+      setRegions(data || []);
+    } catch (error) {
+      console.error('Error fetching regions:', error);
+      toast.error('Failed to fetch regions');
+    }
+  };
 
   const fetchCategories = async () => {
     try {
@@ -76,7 +117,6 @@ export default function Categories() {
         return;
       }
 
-      // Transform the data to include regions
       const categoriesWithRegions = data.map(category => ({
         ...category,
         regions: category.region_category_mapping
@@ -90,10 +130,6 @@ export default function Categories() {
     }
   };
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
   const handleOpen = (category?: Category) => {
     if (category) {
       setEditingId(category.id);
@@ -101,6 +137,9 @@ export default function Categories() {
         name: category.name,
         description: category.description || '',
         order_position: category.order_index,
+        image_url: category.image_url,
+        icon_url: category.icon_url,
+        selectedRegions: category.regions || [],
       });
     } else {
       setEditingId(null);
@@ -108,6 +147,7 @@ export default function Categories() {
         name: '',
         description: '',
         order_position: 0,
+        selectedRegions: [],
       });
     }
     setOpen(true);
@@ -120,7 +160,10 @@ export default function Categories() {
       name: '',
       description: '',
       order_position: 0,
+      selectedRegions: [],
     });
+    setImageTab(0);
+    setIconTab(0);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -129,8 +172,8 @@ export default function Categories() {
 
     try {
       const slug = slugify(formData.name, { lower: true });
-      let image_url = '';
-      let icon_url = '';
+      let image_url = formData.image_url || '';
+      let icon_url = formData.icon_url || '';
 
       if (formData.image) {
         image_url = await uploadImage(formData.image);
@@ -144,34 +187,83 @@ export default function Categories() {
         name: formData.name,
         slug,
         description: formData.description,
-        order_position: formData.order_position,
+        order_index: formData.order_position,
         ...(image_url && { image_url }),
         ...(icon_url && { icon_url }),
       };
 
       if (editingId) {
-        const { error } = await supabase
+        // Update category
+        const { error: updateError } = await supabase
           .from('categories')
           .update(categoryData)
           .eq('id', editingId);
 
-        if (error) throw error;
+        if (updateError) throw updateError;
+
+        // Update region mappings
+        await supabase
+          .from('region_category_mapping')
+          .delete()
+          .eq('category_id', editingId);
+
+        if (formData.selectedRegions.length > 0) {
+          const mappings = formData.selectedRegions.map(region => ({
+            category_id: editingId,
+            region_id: region.id
+          }));
+
+          const { error: mappingError } = await supabase
+            .from('region_category_mapping')
+            .insert(mappings);
+
+          if (mappingError) throw mappingError;
+        }
+
         toast.success('Category updated successfully');
       } else {
-        const { error } = await supabase
+        // Create new category
+        const { data: newCategory, error: insertError } = await supabase
           .from('categories')
-          .insert([categoryData]);
+          .insert([categoryData])
+          .select()
+          .single();
 
-        if (error) throw error;
+        if (insertError) throw insertError;
+
+        if (formData.selectedRegions.length > 0 && newCategory) {
+          const mappings = formData.selectedRegions.map(region => ({
+            category_id: newCategory.id,
+            region_id: region.id
+          }));
+
+          const { error: mappingError } = await supabase
+            .from('region_category_mapping')
+            .insert(mappings);
+
+          if (mappingError) throw mappingError;
+        }
+
         toast.success('Category created successfully');
       }
 
       handleClose();
       fetchCategories();
     } catch (error) {
+      console.error('Error:', error);
       toast.error('Error saving category');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'icon') => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setFormData(prev => ({
+        ...prev,
+        [type]: file,
+      }));
     }
   };
 
@@ -192,7 +284,7 @@ export default function Categories() {
     }
   };
 
-  const columns: GridColDef[] = [
+  const columns: any[] = [
     { field: 'name', headerName: 'Name', flex: 1 },
     { field: 'description', headerName: 'Description', flex: 2 },
     { field: 'order_index', headerName: 'Order', width: 100 },
@@ -231,7 +323,7 @@ export default function Categories() {
   ];
 
   return (
-    <Box>
+    <Box p={3}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
         <Typography variant="h4">Categories</Typography>
         <Button
@@ -290,82 +382,184 @@ export default function Categories() {
         </Table>
       </TableContainer>
 
-      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
         <DialogTitle>
           {editingId ? 'Edit Category' : 'Add New Category'}
         </DialogTitle>
         <DialogContent>
-          <Box component="form" sx={{ mt: 2 }}>
-            <TextField
-              fullWidth
-              label="Name"
-              value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
-              }
-              margin="normal"
-              required
-            />
-            <TextField
-              fullWidth
-              label="Description"
-              value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
-              margin="normal"
-              multiline
-              rows={3}
-            />
-            <TextField
-              fullWidth
-              label="Order Position"
-              type="number"
-              value={formData.order_position}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  order_position: parseInt(e.target.value) || 0,
-                })
-              }
-              margin="normal"
-            />
-            <TextField
-              fullWidth
-              type="file"
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  image: e.target.files ? e.target.files[0] : undefined,
-                })
-              }
-              margin="normal"
-              InputLabelProps={{ shrink: true }}
-              label="Image"
-            />
-            <TextField
-              fullWidth
-              type="file"
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  icon: e.target.files ? e.target.files[0] : undefined,
-                })
-              }
-              margin="normal"
-              InputLabelProps={{ shrink: true }}
-              label="Icon"
-            />
-          </Box>
+          <Grid container spacing={3} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                label="Category Name"
+                fullWidth
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                required
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                label="Description"
+                fullWidth
+                multiline
+                rows={3}
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Autocomplete
+                multiple
+                options={regions}
+                value={formData.selectedRegions}
+                onChange={(_, newValue) => setFormData(prev => ({ ...prev, selectedRegions: newValue }))}
+                getOptionLabel={(option) => option.name}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Associated Regions"
+                    placeholder="Select regions"
+                  />
+                )}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => (
+                    <Chip
+                      label={option.name}
+                      {...getTagProps({ index })}
+                    />
+                  ))
+                }
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>
+                Category Image
+              </Typography>
+              <Tabs value={imageTab} onChange={(_, v) => setImageTab(v)}>
+                <Tab label="Upload" />
+                <Tab label="URL" />
+              </Tabs>
+              <Box sx={{ mt: 2 }}>
+                {imageTab === 0 ? (
+                  <Box>
+                    <input
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      id="category-image"
+                      type="file"
+                      onChange={(e) => handleImageChange(e, 'image')}
+                    />
+                    <label htmlFor="category-image">
+                      <Button
+                        variant="outlined"
+                        component="span"
+                        startIcon={<ImageIcon />}
+                      >
+                        Choose Image
+                      </Button>
+                    </label>
+                    {(formData.image_url || formData.image) && (
+                      <Card sx={{ mt: 2, maxWidth: 200 }}>
+                        <CardMedia
+                          component="img"
+                          height="140"
+                          image={formData.image ? URL.createObjectURL(formData.image) : formData.image_url}
+                          alt="Category image preview"
+                        />
+                      </Card>
+                    )}
+                  </Box>
+                ) : (
+                  <TextField
+                    fullWidth
+                    label="Image URL"
+                    value={formData.image_url || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
+                    InputProps={{
+                      endAdornment: formData.image_url && (
+                        <InputAdornment position="end">
+                          <IconButton size="small" onClick={() => window.open(formData.image_url, '_blank')}>
+                            <ImageIcon />
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                )}
+              </Box>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>
+                Category Icon
+              </Typography>
+              <Tabs value={iconTab} onChange={(_, v) => setIconTab(v)}>
+                <Tab label="Upload" />
+                <Tab label="URL" />
+              </Tabs>
+              <Box sx={{ mt: 2 }}>
+                {iconTab === 0 ? (
+                  <Box>
+                    <input
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      id="category-icon"
+                      type="file"
+                      onChange={(e) => handleImageChange(e, 'icon')}
+                    />
+                    <label htmlFor="category-icon">
+                      <Button
+                        variant="outlined"
+                        component="span"
+                        startIcon={<ImageIcon />}
+                      >
+                        Choose Icon
+                      </Button>
+                    </label>
+                    {(formData.icon_url || formData.icon) && (
+                      <Card sx={{ mt: 2, maxWidth: 100 }}>
+                        <CardMedia
+                          component="img"
+                          height="100"
+                          image={formData.icon ? URL.createObjectURL(formData.icon) : formData.icon_url}
+                          alt="Category icon preview"
+                        />
+                      </Card>
+                    )}
+                  </Box>
+                ) : (
+                  <TextField
+                    fullWidth
+                    label="Icon URL"
+                    value={formData.icon_url || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, icon_url: e.target.value }))}
+                    InputProps={{
+                      endAdornment: formData.icon_url && (
+                        <InputAdornment position="end">
+                          <IconButton size="small" onClick={() => window.open(formData.icon_url, '_blank')}>
+                            <ImageIcon />
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                )}
+              </Box>
+            </Grid>
+          </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button
+          <Button onClick={handleClose} disabled={loading}>Cancel</Button>
+          <Button 
             onClick={handleSubmit}
             variant="contained"
             disabled={loading}
+            startIcon={loading ? <CircularProgress size={20} /> : undefined}
           >
-            {loading ? 'Saving...' : 'Save'}
+            {loading ? 'Saving...' : editingId ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>
