@@ -2,7 +2,6 @@ import React from 'react';
 import {
   Box,
   TextField,
-  Autocomplete,
   FormControl,
   InputLabel,
   Select,

@@ -56,7 +56,7 @@ export default function Dashboard() {
         .select('*', { count: 'exact' });
 
       // Get products by category
-      const { data: productsByCategory, error: categoryError } = await supabase
+      const { error: categoryError } = await supabase
         .from('products')
         .select(`
           subcategory:sub_categories (
@@ -70,13 +70,6 @@ export default function Dashboard() {
       if (categoryError) throw categoryError;
 
       // Process products by category data
-      const categoryStats = productsByCategory.reduce((acc: Record<string, number>, product: any) => {
-        const categoryName = product.subcategory?.category?.name;
-        if (categoryName) {
-          acc[categoryName] = (acc[categoryName] || 0) + 1;
-        }
-        return acc;
-      }, {});
 
       // Get products by region
       const { data: productsByRegion, error: regionError } = await supabase

@@ -25,7 +25,7 @@ import {
 import { Add as AddIcon, Edit as EditIcon } from '@mui/icons-material';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-toastify';
-import type { Region, Category, RegionCategoryMapping } from '../lib/supabase';
+import type { Region, Category } from '../lib/supabase';
 import React from 'react';
 
 const defaultRegion: Partial<Region> = {

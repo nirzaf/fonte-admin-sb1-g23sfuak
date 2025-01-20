@@ -24,7 +24,6 @@ import {
   Tabs,
   Card,
   CardMedia,
-  CardActionArea,
   InputAdornment,
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Image as ImageIcon } from '@mui/icons-material';
@@ -120,7 +119,7 @@ export default function Categories() {
       const categoriesWithRegions = data.map(category => ({
         ...category,
         regions: category.region_category_mapping
-          ?.map(mapping => mapping.regions)
+          ?.map((mapping: { regions: any; }) => mapping.regions)
           .filter(region => region !== null)
       }));
 

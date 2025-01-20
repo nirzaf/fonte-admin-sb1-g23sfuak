@@ -145,8 +145,8 @@ export default function SubCategories() {
     const subCategoriesWithRegions = data.map(subCategory => ({
       ...subCategory,
       regions: subCategory.region_subcategory_mapping
-        ?.map(mapping => mapping.regions)
-        .filter(region => region !== null)
+        ?.map((mapping: { regions: any; }) => mapping.regions)
+        .filter((region: null) => region !== null)
     }));
 
     setSubCategories(subCategoriesWithRegions);
