@@ -11,6 +11,7 @@ import Categories from './pages/Categories';
 import SubCategories from './pages/SubCategories';
 import Products from './pages/Products';
 import Regions from './pages/Regions';
+import MediaLibrary from './pages/MediaLibrary';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
 
@@ -39,6 +40,7 @@ function App() {
             <Route path="subcategories" element={<SubCategories />} />
             <Route path="products" element={<Products />} />
             <Route path="regions" element={<Regions />} />
+            <Route path="media" element={<MediaLibrary />} />
           </Route>
         </Routes>
         <ToastContainer position="bottom-right" />

@@ -21,6 +21,7 @@ import {
   Inventory,
   Public,
   ExitToApp,
+  PhotoLibrary,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -41,6 +42,7 @@ export default function Layout() {
     { text: 'Sub Categories', icon: <Category />, path: '/subcategories' },
     { text: 'Products', icon: <Inventory />, path: '/products' },
     { text: 'Regions', icon: <Public />, path: '/regions' },
+    { text: 'Media Library', icon: <PhotoLibrary />, path: '/media' },
   ];
 
   const drawer = (
