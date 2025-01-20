@@ -47,6 +47,8 @@ Designing a user interface (UI) for an admin operation for your website requires
     - Input fields:
       - Category Name
       - Region Association (multi-select dropdown or checkboxes for regions)
+    - For Image fields show thumnails when admin opens in edit mode.
+    - The admin should able to select the image from Media library or directly mention the URL.
     - Save/Cancel buttons.
 
 ---
@@ -66,6 +68,8 @@ Designing a user interface (UI) for an admin operation for your website requires
       - Subcategory Name
       - Parent Category (dropdown)
       - Region Association (multi-select dropdown or checkboxes for regions)
+     - For Image fields show thumnails when admin opens in edit mode.
+    - The admin should able to select the image from Media library or directly mention the URL.
     - Save/Cancel buttons.
 
 ---
@@ -87,7 +91,8 @@ Designing a user interface (UI) for an admin operation for your website requires
       - Category (dropdown, dynamically filters subcategories)
       - Subcategory (dropdown, dependent on selected category)
       - Region Association (multi-select dropdown or checkboxes for regions)
-      - Product Variants (repeatable fields for variant names, SKUs, prices, etc.)
+      - For Image fields show thumnails when admin opens in edit mode.
+      - The admin should able to select the image from Media library or directly mention the URL.
     - Save/Cancel buttons.
 
 ---
@@ -104,7 +109,11 @@ Designing a user interface (UI) for an admin operation for your website requires
 ---
 
 ### **7. Medica Library
-- Impelemnet
+- Impelemnet Media Libary with Imagekit.io integration.
+- The admin should able to upload the images.
+- Compress the image before uploading it to  imagekit. Bring down the image memory size below to 200KB.
+- Try to keep the quality of the image.
+- Show progress while image is being compressed and uplaading to image kit.
 
 ---
 
