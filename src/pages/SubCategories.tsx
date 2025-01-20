@@ -29,6 +29,7 @@ import { uploadImage } from '../lib/cloudinary';
 import { toast } from 'react-toastify';
 import slugify from 'slugify';
 import React from 'react';
+import FilterSearch from '../components/FilterSearch';
 
 interface Category {
   id: string;
@@ -68,6 +69,7 @@ interface SubCategoryFormData {
 
 export default function SubCategories() {
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
+  const [filteredSubCategories, setFilteredSubCategories] = useState<SubCategory[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [open, setOpen] = useState(false);
@@ -82,6 +84,11 @@ export default function SubCategories() {
     order_index: 0,
     selectedRegions: [],
   });
+
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRegions, setSelectedRegions] = useState<Region[]>([]);
+  const [filterCategory, setFilterCategory] = useState('');
 
   const fetchCategories = async () => {
     const { data, error } = await supabase
@@ -150,6 +157,38 @@ export default function SubCategories() {
     fetchRegions();
     fetchSubCategories();
   }, []);
+
+  useEffect(() => {
+    let filtered = [...subCategories];
+
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(subCategory => 
+        subCategory.name.toLowerCase().includes(query) ||
+        subCategory.description?.toLowerCase().includes(query) ||
+        subCategory.category?.name.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply region filter
+    if (selectedRegions.length > 0) {
+      filtered = filtered.filter(subCategory =>
+        subCategory.regions?.some(region =>
+          selectedRegions.some(sr => sr.id === region.id)
+        )
+      );
+    }
+
+    // Apply category filter
+    if (filterCategory) {
+      filtered = filtered.filter(subCategory =>
+        subCategory.category_id === filterCategory
+      );
+    }
+
+    setFilteredSubCategories(filtered);
+  }, [subCategories, searchQuery, selectedRegions, filterCategory]);
 
   const handleOpen = (subCategory?: SubCategory) => {
     if (subCategory) {
@@ -317,270 +356,330 @@ export default function SubCategories() {
   };
 
   return (
-    <Box p={3}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h4">Sub Categories</Typography>
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, px: 2 }}>
+        <Typography variant="h4" component="h1">
+          Subcategories
+        </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpen()}
         >
-          Add Sub Category
+          Add Subcategory
         </Button>
       </Box>
 
-      <Grid container spacing={2}>
-        {subCategories.map((subCategory) => (
-          <Grid item xs={12} key={subCategory.id}>
-            <Card sx={{ p: 2 }}>
+      <Box sx={{ px: 2 }}>
+        <FilterSearch
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          selectedRegions={selectedRegions}
+          onRegionChange={setSelectedRegions}
+          selectedCategory={filterCategory}
+          onCategoryChange={setFilterCategory}
+          selectedSubCategory=""
+          onSubCategoryChange={() => {}}
+          regions={regions}
+          categories={categories}
+          subCategories={[]}
+          showSubCategoryFilter={false}
+        />
+
+        <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <Box 
+              sx={{ 
+                p: 2, 
+                bgcolor: 'background.paper',
+                borderBottom: 1,
+                borderColor: 'divider',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} sm={2}>
-                  <Typography variant="subtitle1">{subCategory.name}</Typography>
+                  <Typography variant="subtitle2" color="textSecondary">
+                    NAME
+                  </Typography>
                 </Grid>
                 <Grid item xs={12} sm={2}>
-                  <Typography variant="body2" color="textSecondary">
-                    {subCategory.category?.name || 'N/A'}
+                  <Typography variant="subtitle2" color="textSecondary">
+                    CATEGORY
                   </Typography>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <Box display="flex" gap={1} flexWrap="wrap">
-                    {subCategory.regions?.map((region) => (
-                      <Chip
-                        key={region.id}
-                        label={region.name}
-                        size="small"
-                        color="primary"
-                        variant="outlined"
-                      />
-                    ))}
-                  </Box>
+                  <Typography variant="subtitle2" color="textSecondary">
+                    REGIONS
+                  </Typography>
                 </Grid>
                 <Grid item xs={12} sm={2}>
-                  {subCategory.image_url && (
-                    <Card sx={{ width: 60, height: 60 }}>
-                      <CardMedia
-                        component="img"
-                        height="60"
-                        image={subCategory.image_url}
-                        alt={subCategory.name}
-                      />
-                    </Card>
-                  )}
+                  <Typography variant="subtitle2" color="textSecondary">
+                    IMAGE
+                  </Typography>
                 </Grid>
                 <Grid item xs={12} sm={2}>
-                  <Box display="flex" justifyContent="flex-end">
-                    <IconButton onClick={() => handleOpen(subCategory)}>
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton onClick={() => handleDelete(subCategory.id)}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </Box>
+                  <Typography variant="subtitle2" color="textSecondary" align="right">
+                    ACTIONS
+                  </Typography>
                 </Grid>
               </Grid>
-            </Card>
+            </Box>
           </Grid>
-        ))}
-      </Grid>
 
-      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {editingId ? 'Edit Sub Category' : 'Add New Sub Category'}
-        </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={3} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <TextField
-                label="Name"
-                fullWidth
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                required
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <FormControl fullWidth required>
-                <InputLabel>Parent Category</InputLabel>
-                <Select
-                  value={formData.category_id}
-                  label="Parent Category"
-                  onChange={(e) => setFormData(prev => ({ ...prev, category_id: e.target.value }))}
-                >
-                  {categories.map((category) => (
-                    <MenuItem key={category.id} value={category.id}>
-                      {category.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12}>
-              <Autocomplete
-                multiple
-                options={regions}
-                value={formData.selectedRegions}
-                onChange={(_, newValue) => setFormData(prev => ({ ...prev, selectedRegions: newValue }))}
-                getOptionLabel={(option) => option.name}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Associated Regions"
-                    placeholder="Select regions"
-                  />
-                )}
-                renderTags={(value, getTagProps) =>
-                  value.map((option, index) => (
-                    <Chip
-                      label={option.name}
-                      {...getTagProps({ index })}
-                    />
-                  ))
-                }
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                label="Description"
-                fullWidth
-                multiline
-                rows={3}
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <Typography variant="subtitle1" gutterBottom>
-                Subcategory Image
-              </Typography>
-              <Tabs value={imageTab} onChange={(_, v) => setImageTab(v)}>
-                <Tab label="Upload" />
-                <Tab label="URL" />
-              </Tabs>
-              <Box sx={{ mt: 2 }}>
-                {imageTab === 0 ? (
-                  <Box>
-                    <input
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      id="subcategory-image"
-                      type="file"
-                      onChange={(e) => handleImageChange(e, 'image')}
-                    />
-                    <label htmlFor="subcategory-image">
-                      <Button
-                        variant="outlined"
-                        component="span"
-                        startIcon={<ImageIcon />}
-                      >
-                        Choose Image
-                      </Button>
-                    </label>
-                    {(formData.image_url || formData.image) && (
-                      <Card sx={{ mt: 2, maxWidth: 200 }}>
+          {filteredSubCategories.map((subCategory) => (
+            <Grid item xs={12} key={subCategory.id}>
+              <Card sx={{ p: 2 }}>
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12} sm={2}>
+                    <Typography variant="subtitle1">{subCategory.name}</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={2}>
+                    <Typography variant="body2" color="textSecondary">
+                      {subCategory.category?.name || 'N/A'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Box display="flex" gap={1} flexWrap="wrap">
+                      {subCategory.regions?.map((region) => (
+                        <Chip
+                          key={region.id}
+                          label={region.name}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      ))}
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} sm={2}>
+                    {subCategory.image_url && (
+                      <Card sx={{ width: 60, height: 60 }}>
                         <CardMedia
                           component="img"
-                          height="140"
-                          image={formData.image ? URL.createObjectURL(formData.image) : formData.image_url}
-                          alt="Subcategory image preview"
+                          height="60"
+                          image={subCategory.image_url}
+                          alt={subCategory.name}
                         />
                       </Card>
                     )}
-                  </Box>
-                ) : (
-                  <TextField
-                    fullWidth
-                    label="Image URL"
-                    value={formData.image_url || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
-                    InputProps={{
-                      endAdornment: formData.image_url && (
-                        <InputAdornment position="end">
-                          <IconButton size="small" onClick={() => window.open(formData.image_url, '_blank')}>
-                            <ImageIcon />
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                )}
-              </Box>
+                  </Grid>
+                  <Grid item xs={12} sm={2}>
+                    <Box display="flex" justifyContent="flex-end">
+                      <IconButton onClick={() => handleOpen(subCategory)}>
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton onClick={() => handleDelete(subCategory.id)}>
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Card>
             </Grid>
+          ))}
+        </Grid>
 
-            <Grid item xs={12}>
-              <Typography variant="subtitle1" gutterBottom>
-                Subcategory Icon
-              </Typography>
-              <Tabs value={iconTab} onChange={(_, v) => setIconTab(v)}>
-                <Tab label="Upload" />
-                <Tab label="URL" />
-              </Tabs>
-              <Box sx={{ mt: 2 }}>
-                {iconTab === 0 ? (
-                  <Box>
-                    <input
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      id="subcategory-icon"
-                      type="file"
-                      onChange={(e) => handleImageChange(e, 'icon')}
+        <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+          <DialogTitle>
+            {editingId ? 'Edit Sub Category' : 'Add New Sub Category'}
+          </DialogTitle>
+          <DialogContent>
+            <Grid container spacing={3} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <TextField
+                  label="Name"
+                  fullWidth
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  required
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControl fullWidth required>
+                  <InputLabel>Parent Category</InputLabel>
+                  <Select
+                    value={formData.category_id}
+                    label="Parent Category"
+                    onChange={(e) => setFormData(prev => ({ ...prev, category_id: e.target.value }))}
+                  >
+                    {categories.map((category) => (
+                      <MenuItem key={category.id} value={category.id}>
+                        {category.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Autocomplete
+                  multiple
+                  options={regions}
+                  value={formData.selectedRegions}
+                  onChange={(_, newValue) => setFormData(prev => ({ ...prev, selectedRegions: newValue }))}
+                  getOptionLabel={(option) => option.name}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Associated Regions"
+                      placeholder="Select regions"
                     />
-                    <label htmlFor="subcategory-icon">
-                      <Button
-                        variant="outlined"
-                        component="span"
-                        startIcon={<ImageIcon />}
-                      >
-                        Choose Icon
-                      </Button>
-                    </label>
-                    {(formData.icon_url || formData.icon) && (
-                      <Card sx={{ mt: 2, maxWidth: 100 }}>
-                        <CardMedia
-                          component="img"
-                          height="100"
-                          image={formData.icon ? URL.createObjectURL(formData.icon) : formData.icon_url}
-                          alt="Subcategory icon preview"
-                        />
-                      </Card>
-                    )}
-                  </Box>
-                ) : (
-                  <TextField
-                    fullWidth
-                    label="Icon URL"
-                    value={formData.icon_url || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, icon_url: e.target.value }))}
-                    InputProps={{
-                      endAdornment: formData.icon_url && (
-                        <InputAdornment position="end">
-                          <IconButton size="small" onClick={() => window.open(formData.icon_url, '_blank')}>
-                            <ImageIcon />
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                )}
-              </Box>
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        label={option.name}
+                        {...getTagProps({ index })}
+                      />
+                    ))
+                  }
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  label="Description"
+                  fullWidth
+                  multiline
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Subcategory Image
+                </Typography>
+                <Tabs value={imageTab} onChange={(_, v) => setImageTab(v)}>
+                  <Tab label="Upload" />
+                  <Tab label="URL" />
+                </Tabs>
+                <Box sx={{ mt: 2 }}>
+                  {imageTab === 0 ? (
+                    <Box>
+                      <input
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        id="subcategory-image"
+                        type="file"
+                        onChange={(e) => handleImageChange(e, 'image')}
+                      />
+                      <label htmlFor="subcategory-image">
+                        <Button
+                          variant="outlined"
+                          component="span"
+                          startIcon={<ImageIcon />}
+                        >
+                          Choose Image
+                        </Button>
+                      </label>
+                      {(formData.image_url || formData.image) && (
+                        <Card sx={{ mt: 2, maxWidth: 200 }}>
+                          <CardMedia
+                            component="img"
+                            height="140"
+                            image={formData.image ? URL.createObjectURL(formData.image) : formData.image_url}
+                            alt="Subcategory image preview"
+                          />
+                        </Card>
+                      )}
+                    </Box>
+                  ) : (
+                    <TextField
+                      fullWidth
+                      label="Image URL"
+                      value={formData.image_url || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
+                      InputProps={{
+                        endAdornment: formData.image_url && (
+                          <InputAdornment position="end">
+                            <IconButton size="small" onClick={() => window.open(formData.image_url, '_blank')}>
+                              <ImageIcon />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  )}
+                </Box>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Subcategory Icon
+                </Typography>
+                <Tabs value={iconTab} onChange={(_, v) => setIconTab(v)}>
+                  <Tab label="Upload" />
+                  <Tab label="URL" />
+                </Tabs>
+                <Box sx={{ mt: 2 }}>
+                  {iconTab === 0 ? (
+                    <Box>
+                      <input
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        id="subcategory-icon"
+                        type="file"
+                        onChange={(e) => handleImageChange(e, 'icon')}
+                      />
+                      <label htmlFor="subcategory-icon">
+                        <Button
+                          variant="outlined"
+                          component="span"
+                          startIcon={<ImageIcon />}
+                        >
+                          Choose Icon
+                        </Button>
+                      </label>
+                      {(formData.icon_url || formData.icon) && (
+                        <Card sx={{ mt: 2, maxWidth: 100 }}>
+                          <CardMedia
+                            component="img"
+                            height="100"
+                            image={formData.icon ? URL.createObjectURL(formData.icon) : formData.icon_url}
+                            alt="Subcategory icon preview"
+                          />
+                        </Card>
+                      )}
+                    </Box>
+                  ) : (
+                    <TextField
+                      fullWidth
+                      label="Icon URL"
+                      value={formData.icon_url || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, icon_url: e.target.value }))}
+                      InputProps={{
+                        endAdornment: formData.icon_url && (
+                          <InputAdornment position="end">
+                            <IconButton size="small" onClick={() => window.open(formData.icon_url, '_blank')}>
+                              <ImageIcon />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  )}
+                </Box>
+              </Grid>
             </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose} disabled={loading}>Cancel</Button>
-          <Button 
-            onClick={handleSubmit}
-            variant="contained"
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={20} /> : undefined}
-          >
-            {loading ? 'Saving...' : editingId ? 'Update' : 'Create'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleClose} disabled={loading}>Cancel</Button>
+            <Button 
+              onClick={handleSubmit}
+              variant="contained"
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={20} /> : undefined}
+            >
+              {loading ? 'Saving...' : editingId ? 'Update' : 'Create'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
     </Box>
   );
 }

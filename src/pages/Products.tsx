@@ -1,64 +1,84 @@
-import { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Button,
+  Card,
+  CardMedia,
+  Chip,
+  CircularProgress,
   Dialog,
-  DialogTitle,
-  DialogContent,
   DialogActions,
-  TextField,
-  IconButton,
-  Typography,
+  DialogContent,
+  DialogTitle,
   FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   FormControlLabel,
-  Switch,
   Grid,
+  IconButton,
+  InputAdornment,
+  InputLabel,
+  MenuItem,
+  Select,
+  Switch,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
 } from '@mui/material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Image as ImageIcon } from '@mui/icons-material';
 import { supabase } from '../lib/supabase';
-import { uploadImage } from '../lib/cloudinary';
 import { toast } from 'react-toastify';
-import slugify from 'slugify';
+import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import FilterSearch from '../components/FilterSearch';
+import { uploadImage } from '../lib/cloudinary';
+
+interface Category {
+  id: number;
+  name: string;
+}
 
 interface SubCategory {
-  id: string;
+  id: number;
   name: string;
+  category_id: number;
+  category?: Category;
 }
 
 interface Region {
-  id: string;
+  id: number;
   name: string;
 }
 
+interface RegionProductMapping {
+  id: number;
+  product_id: number;
+  region_id: number;
+  region: Region;
+}
+
 interface Product {
-  id: string;
+  id: number;
   name: string;
-  slug: string;
-  description: string;
-  image_url: string;
-  subcategory_id: string;
-  price: number;
+  description?: string;
+  subcategory_id: number;
+  subcategory?: SubCategory;
+  price?: string;
   is_active: boolean;
-  reference: string;
-  composition: string;
-  technique: string;
-  width: string;
-  weight: string;
-  martindale: string;
-  repeats: string;
-  end_use: string;
-  subcategory: SubCategory;
-  region_product_mappings: { region: Region }[];
+  reference?: string;
+  composition?: string;
+  technique?: string;
+  width?: string;
+  weight?: string;
+  martindale?: string;
+  repeats?: string;
+  end_use?: string;
+  image_url?: string;
+  region_product_mapping?: RegionProductMapping[];
 }
 
 interface ProductFormData {
   name: string;
   description: string;
-  subcategory_id: string;
+  subcategory_id: number;
   price: string;
   is_active: boolean;
   reference: string;
@@ -69,21 +89,33 @@ interface ProductFormData {
   martindale: string;
   repeats: string;
   end_use: string;
+  image_url: string;
+  region_ids: number[];
   image?: File;
-  region_ids: string[];
 }
 
 export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
+  const [filteredSubCategories, setFilteredSubCategories] = useState<SubCategory[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [imageTab, setImageTab] = useState(0);
+
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRegions, setSelectedRegions] = useState<Region[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedSubCategory, setSelectedSubCategory] = useState('');
+
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
     description: '',
-    subcategory_id: '',
+    subcategory_id: 0,
     price: '',
     is_active: true,
     reference: '',
@@ -94,13 +126,96 @@ export default function Products() {
     martindale: '',
     repeats: '',
     end_use: '',
+    image_url: '',
     region_ids: [],
   });
+
+  const columns: GridColDef[] = [
+    { field: 'name', headerName: 'Name', flex: 1 },
+    { 
+      field: 'category',
+      headerName: 'Category',
+      flex: 1,
+      valueGetter: (params) => params.row.subcategory?.category?.name || 'N/A',
+    },
+    {
+      field: 'subcategory',
+      headerName: 'Subcategory',
+      flex: 1,
+      valueGetter: (params) => params.row.subcategory?.name || 'N/A',
+    },
+    {
+      field: 'regions',
+      headerName: 'Regions',
+      flex: 1,
+      renderCell: (params) => (
+        <Box display="flex" gap={0.5}>
+          {params.row.region_product_mapping?.map((rpm: RegionProductMapping) => (
+            <Chip key={rpm.region.id} label={rpm.region.name} size="small" />
+          )) || 'N/A'}
+        </Box>
+      ),
+    },
+    {
+      field: 'image',
+      headerName: 'Image',
+      flex: 1,
+      renderCell: (params) => (
+        params.row.image_url ? (
+          <Card sx={{ width: 60, height: 60 }}>
+            <CardMedia
+              component="img"
+              height="60"
+              image={params.row.image_url}
+              alt={params.row.name}
+            />
+          </Card>
+        ) : 'No Image'
+      ),
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 120,
+      renderCell: (params) => (
+        <Box>
+          <IconButton onClick={() => handleOpen(params.row)}>
+            <EditIcon />
+          </IconButton>
+          <IconButton onClick={() => handleDelete(params.row.id)}>
+            <DeleteIcon />
+          </IconButton>
+        </Box>
+      ),
+    },
+  ];
+
+  const fetchCategories = async () => {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('id, name')
+      .order('name');
+
+    if (error) {
+      toast.error('Error fetching categories');
+      return;
+    }
+
+    setCategories(data);
+  };
 
   const fetchSubCategories = async () => {
     const { data, error } = await supabase
       .from('sub_categories')
-      .select('id, name')
+      .select(`
+        id,
+        name,
+        category_id,
+        category:categories (
+          id,
+          name
+        )
+      `)
       .order('name');
 
     if (error) {
@@ -126,15 +241,20 @@ export default function Products() {
   };
 
   const fetchProducts = async () => {
+    console.log('Fetching products...');
     const { data, error } = await supabase
       .from('products')
       .select(`
         *,
         subcategory:sub_categories (
           id,
-          name
+          name,
+          category:categories (
+            id,
+            name
+          )
         ),
-        region_product_mappings (
+        region_product_mapping (
           region:regions (
             id,
             name
@@ -144,25 +264,80 @@ export default function Products() {
       .order('name');
 
     if (error) {
+      console.error('Error fetching products:', error);
       toast.error('Error fetching products');
       return;
     }
 
+    console.log('Products fetched:', data);
     setProducts(data);
   };
 
   useEffect(() => {
+    fetchCategories();
     fetchSubCategories();
     fetchRegions();
     fetchProducts();
   }, []);
 
+  useEffect(() => {
+    let filtered = [...products];
+    
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(product => 
+        product.name.toLowerCase().includes(query) ||
+        product.description?.toLowerCase().includes(query) ||
+        product.reference?.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply category filter
+    if (selectedCategory) {
+      filtered = filtered.filter(product => 
+        product.subcategory?.category?.id === Number(selectedCategory)
+      );
+    }
+
+    // Apply subcategory filter
+    if (selectedSubCategory) {
+      filtered = filtered.filter(product => 
+        product.subcategory_id === Number(selectedSubCategory)
+      );
+    }
+
+    // Apply region filter
+    if (selectedRegions.length > 0) {
+      filtered = filtered.filter(product => {
+        const productRegionIds = product.region_product_mapping?.map(rpm => rpm.region.id) || [];
+        return selectedRegions.some(region => productRegionIds.includes(Number(region.id)));
+      });
+    }
+
+    setFilteredProducts(filtered);
+  }, [products, searchQuery, selectedCategory, selectedSubCategory, selectedRegions]);
+
+  useEffect(() => {
+    if (selectedCategory) {
+      const filtered = subCategories.filter(sc => sc.category_id === Number(selectedCategory));
+      setFilteredSubCategories(filtered);
+    } else {
+      setFilteredSubCategories(subCategories);
+    }
+  }, [selectedCategory, subCategories]);
+
   const handleOpen = (product?: Product) => {
     if (product) {
       setEditingId(product.id);
+      const categoryId = product.subcategory?.category?.id.toString() || '';
+      setSelectedCategory(categoryId);
+      const filtered = subCategories.filter(sc => sc.category_id === Number(categoryId));
+      setFilteredSubCategories(filtered);
+      
       setFormData({
         name: product.name,
-        description: product.description,
+        description: product.description || '',
         subcategory_id: product.subcategory_id,
         price: product.price?.toString() || '',
         is_active: product.is_active,
@@ -174,14 +349,17 @@ export default function Products() {
         martindale: product.martindale || '',
         repeats: product.repeats || '',
         end_use: product.end_use || '',
-        region_ids: product.region_product_mappings.map(rpm => rpm.region.id),
+        image_url: product.image_url || '',
+        region_ids: product.region_product_mapping?.map(rpm => rpm.region.id) || [],
       });
     } else {
       setEditingId(null);
+      setSelectedCategory('');
+      setFilteredSubCategories([]); 
       setFormData({
         name: '',
         description: '',
-        subcategory_id: '',
+        subcategory_id: 0,
         price: '',
         is_active: true,
         reference: '',
@@ -192,48 +370,28 @@ export default function Products() {
         martindale: '',
         repeats: '',
         end_use: '',
+        image_url: '',
         region_ids: [],
       });
     }
     setOpen(true);
   };
 
-  const handleClose = () => {
-    setOpen(false);
-    setEditingId(null);
-    setFormData({
-      name: '',
-      description: '',
-      subcategory_id: '',
-      price: '',
-      is_active: true,
-      reference: '',
-      composition: '',
-      technique: '',
-      width: '',
-      weight: '',
-      martindale: '',
-      repeats: '',
-      end_use: '',
-      region_ids: [],
-    });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setLoading(true);
 
     try {
-      const slug = slugify(formData.name, { lower: true });
-      let image_url = '';
+      let image_url = formData.image_url;
 
       if (formData.image) {
-        image_url = await uploadImage(formData.image);
+        const uploadedUrl = await uploadImage(formData.image);
+        if (uploadedUrl) {
+          image_url = uploadedUrl;
+        }
       }
 
       const productData = {
         name: formData.name,
-        slug,
         description: formData.description,
         subcategory_id: formData.subcategory_id,
         price: formData.price ? parseFloat(formData.price) : null,
@@ -246,7 +404,7 @@ export default function Products() {
         martindale: formData.martindale,
         repeats: formData.repeats,
         end_use: formData.end_use,
-        ...(image_url && { image_url }),
+        image_url,
       };
 
       let productId = editingId;
@@ -293,16 +451,17 @@ export default function Products() {
         }
       }
 
-      handleClose();
+      setOpen(false);
       fetchProducts();
     } catch (error) {
+      console.error('Error saving product:', error);
       toast.error('Error saving product');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: number) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
       const { error } = await supabase
         .from('products')
@@ -319,51 +478,12 @@ export default function Products() {
     }
   };
 
-  const columns: GridColDef[] = [
-    { field: 'name', headerName: 'Name', flex: 1 },
-    { 
-      field: 'subcategory',
-      headerName: 'Sub Category',
-      flex: 1,
-      valueGetter: (params) => params.row.subcategory?.name || 'N/A',
-    },
-    { field: 'price', headerName: 'Price', width: 100 },
-    { 
-      field: 'is_active',
-      headerName: 'Active',
-      width: 100,
-      type: 'boolean',
-    },
-    { 
-      field: 'regions',
-      headerName: 'Regions',
-      flex: 1,
-      valueGetter: (params) => 
-        params.row.region_product_mappings
-          ?.map((rpm: any) => rpm.region.name)
-          .join(', ') || 'N/A',
-    },
-    {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 120,
-      renderCell: (params) => (
-        <Box>
-          <IconButton onClick={() => handleOpen(params.row)}>
-            <EditIcon />
-          </IconButton>
-          <IconButton onClick={() => handleDelete(params.row.id)}>
-            <DeleteIcon />
-          </IconButton>
-        </Box>
-      ),
-    },
-  ];
-
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h4">Products</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h4" component="h1">
+          Products
+        </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -373,8 +493,31 @@ export default function Products() {
         </Button>
       </Box>
 
+      <FilterSearch
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        selectedRegions={selectedRegions.map(r => ({ ...r, id: r.id.toString() }))}
+        onRegionChange={(regions) => setSelectedRegions(regions.map(r => ({ ...r, id: Number(r.id) })))}
+        selectedCategory={selectedCategory}
+        onCategoryChange={(categoryId) => {
+          setSelectedCategory(categoryId);
+          setSelectedSubCategory('');
+          setFilteredSubCategories(subCategories.filter(sc => sc.category_id === Number(categoryId)));
+        }}
+        selectedSubCategory={selectedSubCategory}
+        onSubCategoryChange={setSelectedSubCategory}
+        regions={regions.map(r => ({ ...r, id: r.id.toString() }))}
+        categories={categories.map(c => ({ ...c, id: c.id.toString() }))}
+        subCategories={subCategories.map(sc => ({ 
+          ...sc, 
+          id: sc.id.toString(),
+          category_id: sc.category_id.toString()
+        }))}
+        showSubCategoryFilter={true}
+      />
+
       <DataGrid
-        rows={products}
+        rows={filteredProducts}
         columns={columns}
         initialState={{
           pagination: {
@@ -385,216 +528,189 @@ export default function Products() {
         autoHeight
       />
 
-      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
           {editingId ? 'Edit Product' : 'Add New Product'}
         </DialogTitle>
         <DialogContent>
-          <Box component="form" sx={{ mt: 2 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  margin="normal"
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel>Sub Category</InputLabel>
-                  <Select
-                    value={formData.subcategory_id}
-                    label="Sub Category"
-                    onChange={(e) =>
-                      setFormData({ ...formData, subcategory_id: e.target.value })
-                    }
-                  >
-                    {subCategories.map((subCategory) => (
-                      <MenuItem key={subCategory.id} value={subCategory.id}>
-                        {subCategory.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Description"
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  margin="normal"
-                  multiline
-                  rows={3}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Price"
-                  type="number"
-                  value={formData.price}
-                  onChange={(e) =>
-                    setFormData({ ...formData, price: e.target.value })
-                  }
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={formData.is_active}
-                      onChange={(e) =>
-                        setFormData({ ...formData, is_active: e.target.checked })
-                      }
-                    />
-                  }
-                  label="Active"
-                  sx={{ mt: 2 }}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Reference"
-                  value={formData.reference}
-                  onChange={(e) =>
-                    setFormData({ ...formData, reference: e.target.value })
-                  }
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Composition"
-                  value={formData.composition}
-                  onChange={(e) =>
-                    setFormData({ ...formData, composition: e.target.value })
-                  }
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Technique"
-                  value={formData.technique}
-                  onChange={(e) =>
-                    setFormData({ ...formData, technique: e.target.value })
-                  }
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Width"
-                  value={formData.width}
-                  onChange={(e) =>
-                    setFormData({ ...formData, width: e.target.value })
-                  }
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Weight"
-                  value={formData.weight}
-                  onChange={(e) =>
-                    setFormData({ ...formData, weight: e.target.value })
-                  }
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Martindale"
-                  value={formData.martindale}
-                  onChange={(e) =>
-                    setFormData({ ...formData, martindale: e.target.value })
-                  }
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Repeats"
-                  value={formData.repeats}
-                  onChange={(e) =>
-                    setFormData({ ...formData, repeats: e.target.value })
-                  }
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="End Use"
-                  value={formData.end_use}
-                  onChange={(e) =>
-                    setFormData({ ...formData, end_use: e.target.value })
-                  }
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  type="file"
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      image: e.target.files ? e.target.files[0] : undefined,
-                    })
-                  }
-                  margin="normal"
-                  InputLabelProps={{ shrink: true }}
-                  label="Image"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth margin="normal">
-                  <InputLabel>Regions</InputLabel>
-                  <Select
-                    multiple
-                    value={formData.region_ids}
-                    label="Regions"
-                    onChange={(e) => {
-                      const value = e.target.value as string[];
-                      setFormData({ ...formData, region_ids: value });
-                    }}
-                  >
-                    {regions.map((region) => (
-                      <MenuItem key={region.id} value={region.id}>
-                        {region.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
+          <Grid container spacing={3} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                label="Name"
+                fullWidth
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                required
+              />
             </Grid>
-          </Box>
+
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth required>
+                <InputLabel>Category</InputLabel>
+                <Select
+                  value={selectedCategory}
+                  label="Category"
+                  onChange={(e) => {
+                    const categoryId = e.target.value;
+                    setSelectedCategory(categoryId);
+                    setFormData(prev => ({ ...prev, subcategory_id: 0 })); // Reset subcategory when category changes
+                    const filtered = subCategories.filter(sc => sc.category_id === Number(categoryId));
+                    setFilteredSubCategories(filtered);
+                  }}
+                >
+                  {categories.map((category) => (
+                    <MenuItem key={category.id} value={category.id.toString()}>
+                      {category.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth required>
+                <InputLabel>Subcategory</InputLabel>
+                <Select
+                  value={formData.subcategory_id}
+                  label="Subcategory"
+                  onChange={(e) => setFormData(prev => ({ ...prev, subcategory_id: Number(e.target.value) }))}
+                >
+                  {filteredSubCategories.map((subCategory) => (
+                    <MenuItem key={subCategory.id} value={subCategory.id}>
+                      {subCategory.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Associated Regions</InputLabel>
+                <Select
+                  multiple
+                  value={formData.region_ids}
+                  label="Associated Regions"
+                  onChange={(e) => {
+                    const value = e.target.value as number[];
+                    setFormData(prev => ({ ...prev, region_ids: value }));
+                  }}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map((value) => {
+                        const region = regions.find(r => r.id === value);
+                        return region ? (
+                          <Chip key={value} label={region.name} size="small" />
+                        ) : null;
+                      })}
+                    </Box>
+                  )}
+                >
+                  {regions.map((region) => (
+                    <MenuItem key={region.id} value={region.id}>
+                      {region.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                label="Description"
+                fullWidth
+                multiline
+                rows={3}
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>
+                Product Image
+              </Typography>
+              <Tabs value={imageTab} onChange={(_, v) => setImageTab(v)}>
+                <Tab label="Upload" />
+                <Tab label="URL" />
+              </Tabs>
+              <Box sx={{ mt: 2 }}>
+                {imageTab === 0 ? (
+                  <Box>
+                    <input
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      id="product-image"
+                      type="file"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setFormData(prev => ({ ...prev, image: file }));
+                        }
+                      }}
+                    />
+                    <label htmlFor="product-image">
+                      <Button
+                        variant="outlined"
+                        component="span"
+                        startIcon={<ImageIcon />}
+                      >
+                        Choose Image
+                      </Button>
+                    </label>
+                    {(formData.image_url || formData.image) && (
+                      <Card sx={{ mt: 2, maxWidth: 200 }}>
+                        <CardMedia
+                          component="img"
+                          height="140"
+                          image={formData.image ? URL.createObjectURL(formData.image) : formData.image_url}
+                          alt="Product image preview"
+                        />
+                      </Card>
+                    )}
+                  </Box>
+                ) : (
+                  <TextField
+                    fullWidth
+                    label="Image URL"
+                    value={formData.image_url}
+                    onChange={(e) => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
+                    InputProps={{
+                      endAdornment: formData.image_url && (
+                        <InputAdornment position="end">
+                          <IconButton size="small" onClick={() => window.open(formData.image_url, '_blank')}>
+                            <ImageIcon />
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                )}
+              </Box>
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.is_active}
+                    onChange={(e) => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                  />
+                }
+                label="Active"
+              />
+            </Grid>
+          </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button
+          <Button onClick={() => setOpen(false)} disabled={loading}>Cancel</Button>
+          <Button 
             onClick={handleSubmit}
             variant="contained"
             disabled={loading}
+            startIcon={loading ? <CircularProgress size={20} /> : undefined}
           >
-            {loading ? 'Saving...' : 'Save'}
+            {loading ? 'Saving...' : editingId ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>

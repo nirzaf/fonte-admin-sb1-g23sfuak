@@ -35,26 +35,69 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [
-        { count: categoriesCount },
-        { count: productsCount },
-        { count: regionsCount },
-        { count: subcategoriesCount },
-        { data: regionProductData, error: regionError }
-      ] = await Promise.all([
-        supabase.from('categories').select('*', { count: 'exact', head: true }),
-        supabase.from('products').select('*', { count: 'exact', head: true }),
-        supabase.from('regions').select('*', { count: 'exact', head: true }),
-        supabase.from('subcategories').select('*', { count: 'exact', head: true }),
-        supabase.from('region_product_mapping')
-          .select(`
-            regions (name),
-            count
-          `)
-          .groupBy('regions.name')
-      ]);
+      // Get products count
+      const { count: productsCount } = await supabase
+        .from('products')
+        .select('*', { count: 'exact' });
+
+      // Get categories count
+      const { count: categoriesCount } = await supabase
+        .from('categories')
+        .select('*', { count: 'exact' });
+
+      // Get subcategories count
+      const { count: subcategoriesCount } = await supabase
+        .from('subcategories')
+        .select('*', { count: 'exact' });
+
+      // Get regions count
+      const { count: regionsCount } = await supabase
+        .from('regions')
+        .select('*', { count: 'exact' });
+
+      // Get products by category
+      const { data: productsByCategory, error: categoryError } = await supabase
+        .from('products')
+        .select(`
+          subcategory:subcategories (
+            category:categories (
+              id,
+              name
+            )
+          )
+        `);
+
+      if (categoryError) throw categoryError;
+
+      // Process products by category data
+      const categoryStats = productsByCategory.reduce((acc: Record<string, number>, product: any) => {
+        const categoryName = product.subcategory?.category?.name;
+        if (categoryName) {
+          acc[categoryName] = (acc[categoryName] || 0) + 1;
+        }
+        return acc;
+      }, {});
+
+      // Get products by region
+      const { data: productsByRegion, error: regionError } = await supabase
+        .from('region_product_mapping')
+        .select(`
+          region:regions (
+            id,
+            name
+          )
+        `);
 
       if (regionError) throw regionError;
+
+      // Process products by region data
+      const regionStats = productsByRegion.reduce((acc: Record<string, number>, mapping: any) => {
+        const regionName = mapping.region?.name;
+        if (regionName) {
+          acc[regionName] = (acc[regionName] || 0) + 1;
+        }
+        return acc;
+      }, {});
 
       setCounts({
         categories: categoriesCount || 0,
@@ -63,9 +106,9 @@ export default function Dashboard() {
         subcategories: subcategoriesCount || 0,
       });
 
-      const formattedRegionData = (regionProductData || []).map(item => ({
-        region_name: item.regions?.name || 'Unknown',
-        product_count: parseInt(item.count)
+      const formattedRegionData = Object.keys(regionStats).map(regionName => ({
+        region_name: regionName,
+        product_count: regionStats[regionName]
       }));
 
       setRegionProducts(formattedRegionData);
