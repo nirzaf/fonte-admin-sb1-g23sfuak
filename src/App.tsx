@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ToastContainer } from 'react-toastify';
@@ -28,14 +28,29 @@ const theme = createTheme({
 });
 
 function App() {
+  const location = useLocation();
+  console.log('App rendering, current location:', location);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route
+              index
+              element={
+                <Navigate to="/dashboard" replace />
+              }
+            />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="categories" element={<Categories />} />
             <Route path="subcategories" element={<SubCategories />} />
@@ -45,7 +60,17 @@ function App() {
             <Route path="messages" element={<Messages />} />
           </Route>
         </Routes>
-        <ToastContainer position="bottom-right" />
+        <ToastContainer
+          position="bottom-right"
+          autoClose={5000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+        />
       </AuthProvider>
     </ThemeProvider>
   );
