@@ -570,7 +570,7 @@ export default function Products() {
       if (productId) {
         // Delete existing mappings
         await supabase
-          .from('region_product_mappings')
+          .from('region_product_mapping')
           .delete()
           .eq('product_id', productId);
 
@@ -582,7 +582,7 @@ export default function Products() {
           }));
 
           const { error } = await supabase
-            .from('region_product_mappings')
+            .from('region_product_mapping')
             .insert(mappings);
 
           if (error) throw error;
@@ -601,7 +601,7 @@ export default function Products() {
         if (formData.colors.length > 0) {
           const colors = formData.colors.map(color => ({
             product_id: productId,
-            color_name: color.color_name,
+            name: color.color_name,
             color_code: color.color_code,
             image_url: color.image_url,
             is_default: color.is_default,
@@ -822,7 +822,7 @@ export default function Products() {
               <Box sx={{ mt: 2 }}>
                 {imageTab === 0 ? (
                   <Box>
-                    <input
+                   {/*} <input
                       accept="image/*"
                       style={{ display: 'none' }}
                       id="product-image"
@@ -843,6 +843,7 @@ export default function Products() {
                         Choose Image
                       </Button>
                     </label>
+                    */}
                     {(formData.image_url || formData.image) && (
                       <Card sx={{ mt: 2, maxWidth: 200 }}>
                         <CardMedia
