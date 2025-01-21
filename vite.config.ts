@@ -16,5 +16,14 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
       },
     },
+    sourcemap: true,
   },
+  define: {
+    'process.env': {}
+  },
+  server: {
+    watch: {
+      usePolling: true
+    }
+  }
 })

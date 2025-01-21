@@ -23,6 +23,7 @@ interface RegionProductCount {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [counts, setCounts] = useState<DashboardCounts>({
     categories: 0,
     products: 0,
@@ -33,95 +34,109 @@ export default function Dashboard() {
   const [regionProducts, setRegionProducts] = useState<RegionProductCount[]>([]);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      // Get products count
-      const { count: productsCount } = await supabase
-        .from('products')
-        .select('*', { count: 'exact' });
+        // Categories count
+        const { count: categoriesCount, error: categoriesError } = await supabase
+          .from('categories')
+          .select('*', { count: 'exact', head: true });
 
-      // Get categories count
-      const { count: categoriesCount } = await supabase
-        .from('categories')
-        .select('*', { count: 'exact' });
+        if (categoriesError) throw new Error('Error fetching categories');
 
-      // Get subcategories count
-      const { count: subcategoriesCount } = await supabase
-        .from('sub_categories')
-        .select('*', { count: 'exact' });
+        // Products count
+        const { count: productsCount, error: productsError } = await supabase
+          .from('products')
+          .select('*', { count: 'exact', head: true });
 
-      // Get regions count
-      const { count: regionsCount } = await supabase
-        .from('regions')
-        .select('*', { count: 'exact' });
+        if (productsError) throw new Error('Error fetching products');
 
-      // Get unread messages count
-      const { count: unreadCount } = await supabase
-        .from('contactus_response')
-        .select('*', { count: 'exact' })
-        .eq('mark_as_read', false);
+        // Regions count
+        const { count: regionsCount, error: regionsError } = await supabase
+          .from('regions')
+          .select('*', { count: 'exact', head: true });
 
-      // Get products by category
-      const { error: categoryError } = await supabase
-        .from('products')
-        .select(`
-          subcategory:sub_categories (
-            category:categories (
+        if (regionsError) throw new Error('Error fetching regions');
+
+        // Subcategories count
+        const { count: subcategoriesCount, error: subcategoriesError } = await supabase
+          .from('sub_categories')
+          .select('*', { count: 'exact', head: true });
+
+        if (subcategoriesError) throw new Error('Error fetching subcategories');
+
+        // Unread messages count
+        const { count: messagesCount, error: messagesError } = await supabase
+          .from('contactus_response')
+          .select('*', { count: 'exact', head: true })
+          .eq('mark_as_read', false);
+
+        if (messagesError) throw new Error('Error fetching messages');
+
+        // Get products by region
+        const { data: productsByRegion, error: regionError } = await supabase
+          .from('region_product_mapping')
+          .select(`
+            region:regions (
               id,
               name
             )
-          )
-        `);
+          `);
 
-      if (categoryError) throw categoryError;
+        if (regionError) throw new Error('Error fetching products by region');
 
-      // Process products by category data
+        setCounts({
+          categories: categoriesCount || 0,
+          products: productsCount || 0,
+          regions: regionsCount || 0,
+          subcategories: subcategoriesCount || 0,
+          unreadMessages: messagesCount || 0,
+        });
 
-      // Get products by region
-      const { data: productsByRegion, error: regionError } = await supabase
-        .from('region_product_mapping')
-        .select(`
-          region:regions (
-            id,
-            name
-          )
-        `);
+        const regionStats = productsByRegion.reduce((acc: Record<string, number>, mapping: any) => {
+          const regionName = mapping.region?.name;
+          if (regionName) {
+            acc[regionName] = (acc[regionName] || 0) + 1;
+          }
+          return acc;
+        }, {});
 
-      if (regionError) throw regionError;
+        const formattedRegionData = Object.keys(regionStats).map(regionName => ({
+          region_name: regionName,
+          product_count: regionStats[regionName]
+        }));
 
-      // Process products by region data
-      const regionStats = productsByRegion.reduce((acc: Record<string, number>, mapping: any) => {
-        const regionName = mapping.region?.name;
-        if (regionName) {
-          acc[regionName] = (acc[regionName] || 0) + 1;
-        }
-        return acc;
-      }, {});
+        setRegionProducts(formattedRegionData);
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+        setError(err instanceof Error ? err.message : 'An error occurred while fetching data');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      setCounts({
-        categories: categoriesCount || 0,
-        products: productsCount || 0,
-        regions: regionsCount || 0,
-        subcategories: subcategoriesCount || 0,
-        unreadMessages: unreadCount || 0,
-      });
+    fetchDashboardData();
+  }, []);
 
-      const formattedRegionData = Object.keys(regionStats).map(regionName => ({
-        region_name: regionName,
-        product_count: regionStats[regionName]
-      }));
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
-      setRegionProducts(formattedRegionData);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (error) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
+        <Typography color="error" variant="h6">
+          {error}
+        </Typography>
+      </Box>
+    );
+  }
 
   const stats = [
     {
@@ -160,14 +175,6 @@ export default function Dashboard() {
       path: '/messages'
     }
   ];
-
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
-        <CircularProgress />
-      </Box>
-    );
-  }
 
   return (
     <Box p={3}>

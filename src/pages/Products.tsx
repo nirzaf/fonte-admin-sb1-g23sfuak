@@ -165,13 +165,13 @@ export default function Products() {
       field: 'category',
       headerName: 'Category',
       flex: 1,
-      valueGetter: (params) => params.row.subcategory?.category?.name || 'N/A',
+      valueGetter: (params: { row: Product }) => params.row.subcategory?.category?.name || 'N/A',
     },
     {
       field: 'subcategory',
       headerName: 'Subcategory',
       flex: 1,
-      valueGetter: (params) => params.row.subcategory?.name || 'N/A',
+      valueGetter: (params: { row: Product }) => params.row.subcategory?.name || 'N/A',
     },
     {
       field: 'regions',

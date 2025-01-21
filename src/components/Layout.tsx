@@ -51,7 +51,7 @@ export default function Layout() {
       <List>
         {menuItems.map((item) => (
           <ListItem
-            button
+            sx={{ cursor: 'pointer' }}
             key={item.text}
             onClick={() => navigate(item.path)}
           >

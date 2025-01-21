@@ -6,34 +6,50 @@ const cloudinaryConfig = {
   api_secret: import.meta.env.VITE_CLOUDINARY_API_SECRET,
 };
 
+if (!cloudinaryConfig.cloud_name) {
+  throw new Error('Missing Cloudinary cloud name. Please check your .env.local file.');
+}
+
 export const cloudinary = new Cloudinary({
   cloud: {
     cloudName: cloudinaryConfig.cloud_name
+  },
+  url: {
+    secure: true,
+    privateCdn: false,
+    secureDistribution: null
   }
 });
 
 export const uploadImage = async (file: File) => {
-  // Compress image before upload
-  const compressedFile = await compressImage(file);
-  
-  const formData = new FormData();
-  formData.append('file', compressedFile);
-  formData.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+  try {
+    // Compress image before upload
+    const compressedFile = await compressImage(file);
+    
+    const formData = new FormData();
+    formData.append('file', compressedFile);
+    formData.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+    formData.append('api_key', cloudinaryConfig.api_key);
 
-  const response = await fetch(
-    `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloud_name}/image/upload`,
-    {
-      method: 'POST',
-      body: formData,
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloud_name}/image/upload`,
+      {
+        method: 'POST',
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to upload image');
     }
-  );
 
-  if (!response.ok) {
-    throw new Error('Failed to upload image');
+    const data = await response.json();
+    return data.secure_url;
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    throw error;
   }
-
-  const data = await response.json();
-  return data.secure_url;
 };
 
 const compressImage = async (file: File): Promise<Blob> => {
