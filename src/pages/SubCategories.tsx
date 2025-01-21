@@ -552,14 +552,9 @@ export default function SubCategories() {
                   multiple
                   id="regions"
                   options={convertedRegions}
-                  value={convertedSelectedRegions}
+                  value={formData.selectedRegions}
                   onChange={(_, newValue) => {
-                    const converted = newValue.map(r => ({
-                      id: String(r.id),
-                      name: r.name,
-                      code: r.code || ''
-                    }));
-                    setFormData(prev => ({ ...prev, selectedRegions: converted }));
+                    setFormData(prev => ({ ...prev, selectedRegions: newValue }));
                   }}
                   getOptionLabel={(option) => option.name}
                   renderInput={(params) => (
@@ -594,6 +589,7 @@ export default function SubCategories() {
                 <Box sx={{ mt: 2 }}>
                   {imageTab === 0 ? (
                     <Box>
+                    {/*}
                       <input
                         accept="image/*"
                         style={{ display: 'none' }}
@@ -601,6 +597,7 @@ export default function SubCategories() {
                         type="file"
                         onChange={(e) => handleImageChange(e, 'image')}
                       />
+                      
                       <label htmlFor="subcategory-image">
                         <Button
                           variant="outlined"
@@ -610,6 +607,7 @@ export default function SubCategories() {
                           Choose Image
                         </Button>
                       </label>
+                      */}
                       {(formData.image_url || formData.image) && (
                         <Card sx={{ mt: 2, maxWidth: 200 }}>
                           <CardMedia
@@ -652,7 +650,7 @@ export default function SubCategories() {
                 <Box sx={{ mt: 2 }}>
                   {iconTab === 0 ? (
                     <Box>
-                      <input
+                    {/*}  <input
                         accept="image/*"
                         style={{ display: 'none' }}
                         id="subcategory-icon"
@@ -668,6 +666,7 @@ export default function SubCategories() {
                           Choose Icon
                         </Button>
                       </label>
+                      */}
                       {(formData.icon_url || formData.icon) && (
                         <Card sx={{ mt: 2, maxWidth: 100 }}>
                           <CardMedia
