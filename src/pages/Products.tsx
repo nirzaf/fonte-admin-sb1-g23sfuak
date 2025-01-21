@@ -33,14 +33,14 @@ import FilterSearch from '../components/FilterSearch';
 import { uploadImage } from '../lib/cloudinary';
 
 interface Category {
-  id: number;
+  id: string;
   name: string;
 }
 
 interface SubCategory {
-  id: number;
+  id: string;
   name: string;
-  category_id: number;
+  category_id: string;
   category?: Category;
 }
 
@@ -326,7 +326,24 @@ export default function Products() {
       return;
     }
 
-    setSubCategories(data);
+    // Convert the data to match SubCategory type
+    const convertedData: SubCategory[] = data.map(item => {
+      const categoryData = Array.isArray(item.category) && item.category.length > 0
+        ? item.category[0]
+        : (item.category || { id: '', name: '' });
+
+      return {
+        id: String(item.id || ''),
+        name: item.name || '',
+        category_id: String(item.category_id || ''),
+        category: {
+          id: String(Array.isArray(categoryData) ? categoryData[0]?.id : categoryData?.id || ''),
+          name: Array.isArray(categoryData) ? categoryData[0]?.name || '' : categoryData?.name || ''
+        }
+      };
+    });
+
+    setSubCategories(convertedData);
   };
 
   const fetchRegions = async () => {
@@ -409,25 +426,22 @@ export default function Products() {
     }
 
     // Apply category filter
-    if (selectedCategory) {
-      filtered = filtered.filter(product => 
-        product.subcategory?.category?.id === Number(selectedCategory)
-      );
-    }
-
-    // Apply subcategory filter
-    if (selectedSubCategory) {
-      filtered = filtered.filter(product => 
-        product.subcategory_id === Number(selectedSubCategory)
-      );
-    }
+    const filteredCategories = filtered.filter(product => {
+      const categoryMatch = !selectedCategory || 
+        String(product.subcategory?.category?.id) === String(selectedCategory);
+      const subCategoryMatch = !selectedSubCategory || 
+        String(product.subcategory?.id) === String(selectedSubCategory);
+      return categoryMatch && subCategoryMatch;
+    });
 
     // Apply region filter
     if (selectedRegions.length > 0) {
-      filtered = filtered.filter(product => {
+      filtered = filteredCategories.filter(product => {
         const productRegionIds = product.region_product_mapping?.map(rpm => rpm.region.id) || [];
         return selectedRegions.some(region => productRegionIds.includes(Number(region.id)));
       });
+    } else {
+      filtered = filteredCategories;
     }
 
     setFilteredProducts(filtered);
@@ -435,7 +449,7 @@ export default function Products() {
 
   useEffect(() => {
     if (selectedCategory) {
-      const filtered = subCategories.filter(sc => sc.category_id === Number(selectedCategory));
+      const filtered = subCategories.filter(sc => sc.category_id === selectedCategory);
       setFilteredSubCategories(filtered);
     } else {
       setFilteredSubCategories(subCategories);
@@ -447,7 +461,7 @@ export default function Products() {
       setEditingId(product.id);
       const categoryId = product.subcategory?.category?.id.toString() || '';
       setSelectedCategory(categoryId);
-      const filtered = subCategories.filter(sc => sc.category_id === Number(categoryId));
+      const filtered = subCategories.filter(sc => sc.category_id === categoryId);
       setFilteredSubCategories(filtered);
       
       setFormData({
@@ -675,7 +689,7 @@ export default function Products() {
         onCategoryChange={(categoryId) => {
           setSelectedCategory(categoryId);
           setSelectedSubCategory('');
-          setFilteredSubCategories(subCategories.filter(sc => sc.category_id === Number(categoryId)));
+          setFilteredSubCategories(subCategories.filter(sc => sc.category_id === categoryId));
         }}
         selectedSubCategory={selectedSubCategory}
         onSubCategoryChange={setSelectedSubCategory}
@@ -725,7 +739,7 @@ export default function Products() {
                     const categoryId = e.target.value;
                     setSelectedCategory(categoryId);
                     setFormData(prev => ({ ...prev, subcategory_id: 0 })); // Reset subcategory when category changes
-                    const filtered = subCategories.filter(sc => sc.category_id === Number(categoryId));
+                    const filtered = subCategories.filter(sc => sc.category_id === categoryId);
                     setFilteredSubCategories(filtered);
                   }}
                 >
