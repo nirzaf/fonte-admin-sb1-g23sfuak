@@ -4,12 +4,15 @@ import { Category, Inventory, Public, ViewList } from '@mui/icons-material';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Email as EmailIcon } from '@mui/icons-material';
+import { Badge } from '@mui/material';
 
 interface DashboardCounts {
   categories: number;
   products: number;
   regions: number;
   subcategories: number;
+  unreadMessages: number;
 }
 
 interface RegionProductCount {
@@ -25,6 +28,7 @@ export default function Dashboard() {
     products: 0,
     regions: 0,
     subcategories: 0,
+    unreadMessages: 0,
   });
   const [regionProducts, setRegionProducts] = useState<RegionProductCount[]>([]);
 
@@ -54,6 +58,12 @@ export default function Dashboard() {
       const { count: regionsCount } = await supabase
         .from('regions')
         .select('*', { count: 'exact' });
+
+      // Get unread messages count
+      const { count: unreadCount } = await supabase
+        .from('contactus_response')
+        .select('*', { count: 'exact' })
+        .eq('mark_as_read', false);
 
       // Get products by category
       const { error: categoryError } = await supabase
@@ -97,6 +107,7 @@ export default function Dashboard() {
         products: productsCount || 0,
         regions: regionsCount || 0,
         subcategories: subcategoriesCount || 0,
+        unreadMessages: unreadCount || 0,
       });
 
       const formattedRegionData = Object.keys(regionStats).map(regionName => ({
@@ -140,6 +151,13 @@ export default function Dashboard() {
       icon: <ViewList sx={{ fontSize: 40 }} />,
       color: '#9c27b0',
       path: '/subcategories'
+    },
+    {
+      title: 'Messages',
+      value: counts.unreadMessages,
+      icon: <EmailIcon sx={{ fontSize: 40 }} />,
+      color: '#9c27b0',
+      path: '/messages'
     }
   ];
 
@@ -158,55 +176,73 @@ export default function Dashboard() {
       </Typography>
 
       <Grid container spacing={3} mb={4}>
-        {stats.map((stat) => (
+        {stats.map((stat, index) => (
           <Grid item xs={12} sm={6} md={3} key={stat.title}>
-            <Card 
-              sx={{ 
-                height: '100%',
-                cursor: 'pointer',
-                transition: 'transform 0.2s',
-                '&:hover': {
-                  transform: 'scale(1.02)'
-                }
-              }}
-              onClick={() => navigate(stat.path)}
-            >
-              <CardContent>
-                <Box display="flex" alignItems="center" mb={2}>
-                  <Box
-                    sx={{
-                      bgcolor: stat.color,
-                      borderRadius: 2,
-                      p: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'white',
-                    }}
-                  >
-                    {stat.icon}
-                  </Box>
-                  <Box ml={2}>
-                    <Typography variant="h4" component="div">
-                      {stat.value}
-                    </Typography>
-                    <Typography color="textSecondary">
+            {index === 4 ? (
+              <Card sx={{ cursor: 'pointer' }} onClick={() => navigate(stat.path)}>
+                <CardContent>
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography color="textSecondary" gutterBottom>
                       {stat.title}
                     </Typography>
+                    <Badge badgeContent={stat.value} color="error">
+                      {stat.icon}
+                    </Badge>
                   </Box>
-                </Box>
-                <Button 
-                  variant="outlined" 
-                  fullWidth
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(stat.path);
-                  }}
-                >
-                  View Details
-                </Button>
-              </CardContent>
-            </Card>
+                  <Typography variant="h5">
+                    {stat.value} unread
+                  </Typography>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card 
+                sx={{ 
+                  height: '100%',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s',
+                  '&:hover': {
+                    transform: 'scale(1.02)'
+                  }
+                }}
+                onClick={() => navigate(stat.path)}
+              >
+                <CardContent>
+                  <Box display="flex" alignItems="center" mb={2}>
+                    <Box
+                      sx={{
+                        bgcolor: stat.color,
+                        borderRadius: 2,
+                        p: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                      }}
+                    >
+                      {stat.icon}
+                    </Box>
+                    <Box ml={2}>
+                      <Typography variant="h4" component="div">
+                        {stat.value}
+                      </Typography>
+                      <Typography color="textSecondary">
+                        {stat.title}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Button 
+                    variant="outlined" 
+                    fullWidth
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(stat.path);
+                    }}
+                  >
+                    View Details
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </Grid>
         ))}
       </Grid>

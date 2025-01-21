@@ -152,3 +152,17 @@ export interface Heroku
   map_url:string;
 
 }
+
+export interface ContactUsResponse {
+  id:string;
+  created_at: string;
+  name: string;
+  email: string;
+  message: string;
+  phone: string;
+  is_ok_receive_communication: boolean;
+  region_code: string;
+  mark_as_read: boolean;
+
+
+}
