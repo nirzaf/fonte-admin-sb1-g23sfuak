@@ -36,8 +36,14 @@ interface Category {
   name: string;
 }
 
-interface Region {
+interface DbRegion {
   id: number;
+  name: string;
+  code: string;
+}
+
+interface Region {
+  id: string;
   name: string;
   code: string;
 }
@@ -52,7 +58,7 @@ interface SubCategory {
   category_id: string;
   order_index: number;
   category: Category;
-  regions?: { id: number; name: string }[];
+  regions?: { id: string; name: string; code: string }[];
 }
 
 interface SubCategoryFormData {
@@ -64,14 +70,14 @@ interface SubCategoryFormData {
   icon?: File;
   image_url?: string;
   icon_url?: string;
-  selectedRegions: { id: number; name: string }[];
+  selectedRegions: Region[];
 }
 
 export default function SubCategories() {
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
   const [filteredSubCategories, setFilteredSubCategories] = useState<SubCategory[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [regions, setRegions] = useState<Region[]>([]);
+  const [regions, setRegions] = useState<DbRegion[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -200,7 +206,11 @@ export default function SubCategories() {
         order_index: subCategory.order_index,
         image_url: subCategory.image_url,
         icon_url: subCategory.icon_url,
-        selectedRegions: subCategory.regions || [],
+        selectedRegions: subCategory.regions?.map(r => ({
+          id: String(r.id),
+          name: r.name,
+          code: r.code || ''
+        })) || [],
       });
     } else {
       setEditingId(null);
@@ -283,7 +293,7 @@ export default function SubCategories() {
         if (formData.selectedRegions.length > 0) {
           const mappings = formData.selectedRegions.map(region => ({
             subcategory_id: editingId,
-            region_id: region.id
+            region_id: Number(region.id)
           }));
 
           const { error: mappingError } = await supabase
@@ -306,7 +316,7 @@ export default function SubCategories() {
         if (formData.selectedRegions.length > 0 && newSubCategory) {
           const mappings = formData.selectedRegions.map(region => ({
             subcategory_id: newSubCategory.id,
-            region_id: region.id
+            region_id: Number(region.id)
           }));
 
           const { error: mappingError } = await supabase
@@ -355,6 +365,29 @@ export default function SubCategories() {
     }
   };
 
+  const handleRegionChange = (newRegions: Region[]) => {
+    const convertedRegions = newRegions.map(r => ({
+      id: String(r.id),
+      name: r.name,
+      code: r.code || ''
+    }));
+    setSelectedRegions(convertedRegions);
+  };
+
+  // Convert database regions to component format
+  const convertedRegions = regions.map(region => ({
+    id: String(region.id),
+    name: region.name,
+    code: region.code || ''
+  }));
+
+  // Convert selected regions to component format
+  const convertedSelectedRegions = selectedRegions.map(region => ({
+    id: String(region.id),
+    name: region.name,
+    code: region.code || ''
+  }));
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, px: 2 }}>
@@ -374,13 +407,13 @@ export default function SubCategories() {
         <FilterSearch
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          selectedRegions={selectedRegions}
-          onRegionChange={setSelectedRegions}
+          selectedRegions={convertedSelectedRegions}
+          onRegionChange={handleRegionChange}
           selectedCategory={filterCategory}
           onCategoryChange={setFilterCategory}
           selectedSubCategory=""
           onSubCategoryChange={() => {}}
-          regions={regions}
+          regions={convertedRegions}
           categories={categories}
           subCategories={[]}
           showSubCategoryFilter={false}
@@ -517,25 +550,25 @@ export default function SubCategories() {
               <Grid item xs={12}>
                 <Autocomplete
                   multiple
-                  options={regions}
-                  value={formData.selectedRegions}
-                  onChange={(_, newValue) => setFormData(prev => ({ ...prev, selectedRegions: newValue }))}
+                  id="regions"
+                  options={convertedRegions}
+                  value={convertedSelectedRegions}
+                  onChange={(_, newValue) => {
+                    const converted = newValue.map(r => ({
+                      id: String(r.id),
+                      name: r.name,
+                      code: r.code || ''
+                    }));
+                    setFormData(prev => ({ ...prev, selectedRegions: converted }));
+                  }}
                   getOptionLabel={(option) => option.name}
                   renderInput={(params) => (
                     <TextField
                       {...params}
-                      label="Associated Regions"
+                      label="Regions"
                       placeholder="Select regions"
                     />
                   )}
-                  renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip
-                        label={option.name}
-                        {...getTagProps({ index })}
-                      />
-                    ))
-                  }
                 />
               </Grid>
 

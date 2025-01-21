@@ -69,37 +69,34 @@ export default function MediaLibrary() {
             // Compress image
             const compressedFile = await compressImage(file);
 
-            // Get authentication parameters from Firebase Function
-            const authResponse = await fetch(IMAGEKIT_AUTH_URL);
+            // Get authentication parameters from server
+            const authResponse = await fetch('/api/imagekit-auth');
             if (!authResponse.ok) {
                 throw new Error('Failed to get authentication parameters');
             }
-
             const authData = await authResponse.json();
-            
+
             // Upload to ImageKit
             setUploadProgress(prev => ({ ...prev, uploading: true }));
             
-            const upload = await imagekit.upload({
+            const uploadResponse = await imagekit.upload({
                 file: compressedFile,
                 fileName: file.name,
                 useUniqueFileName: true,
                 token: authData.token,
                 signature: authData.signature,
-                expire: authData.expire,
-                onUploadProgress: (progress) => {
-                    setUploadProgress(prev => ({
-                        ...prev,
-                        progress: Math.round((progress.loaded / progress.total) * 100),
-                    }));
-                },
+                expire: authData.expire
             });
+
+            if (!uploadResponse) {
+                throw new Error('Upload failed');
+            }
 
             // Add to media items
             setMediaItems(prev => [...prev, {
-                url: upload.url,
-                fileId: upload.fileId,
-                fileName: upload.name,
+                url: uploadResponse?.url || '',
+                fileId: uploadResponse?.fileId || '',
+                fileName: uploadResponse?.name || file.name,
             }]);
 
             toast.success('Image uploaded successfully!');
@@ -117,7 +114,20 @@ export default function MediaLibrary() {
 
     const handleDelete = async (fileId: string) => {
         try {
-            await imagekit.deleteFile(fileId);
+            // Get authentication parameters from server
+            const authResponse = await fetch('/api/imagekit-auth');
+            if (!authResponse.ok) {
+                throw new Error('Failed to get authentication parameters');
+            }
+            const authData = await authResponse.json();
+
+            await fetch(`/api/imagekit/files/${fileId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${authData.token}`
+                }
+            });
+
             setMediaItems(prev => prev.filter(item => item.fileId !== fileId));
             toast.success('Image deleted successfully!');
         } catch (error) {
